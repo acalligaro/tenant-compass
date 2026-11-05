@@ -2,7 +2,7 @@
 
 *A toolbox for the Microsoft Intune admin center.* · [Version française](README.md)
 
-Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, PIM shortcut, Policy Import and Bulk Assignment in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
+Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, PIM shortcut, Policy Import, Bulk Assignment and Scope Tags Clean up in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
 
 Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -29,6 +29,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 - [PIM shortcut](#pim-shortcut)
 - [Policy Import](#policy-import)
 - [Bulk Assignment](#bulk-assignment)
+- [Scope Tags Clean up](#scope-tags-clean-up)
 - [Moving panels](#moving-panels)
 - [How it works](#how-it-works)
 - [Limitations](#limitations)
@@ -49,6 +50,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | PIM shortcut | Opens PIM > My roles (eligible or active assignments) on the active tab's tenant in one click | 🔑 PIM eligible and 🔑 PIM active buttons in the menu |
 | Policy Import | Creates policies from As-Built JSON exports, with optional group and scope tags. **Writes to the tenant: off by default** | Import button, right of As-Built (Intune) |
 | Bulk Assignment | Adds an assignment (group, all users, all devices), a filter and scope tags to several policies. **Writes to the tenant: off by default** | Bulk Assign button, right of Import (Intune) |
+| Scope Tags Clean up | Removes the Default scope tag from policies and apps that have another scope tag. **Writes to the tenant: off by default** | Scope Tags button, right of Bulk Assign (Intune) |
 
 ## Installation
 
@@ -66,6 +68,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | As-Built, Assignment Lens | Reads (`GET`) on `graph.microsoft.com`, with the portal session | The policies, apps and groups shown, as the portal itself does |
 | Policy Import, if you turn it on | Reads existing names (`GET`) and creates (`POST`) on `graph.microsoft.com`, with the portal session | The policies of the files you choose and confirm, and if you ask their group and scope tags |
 | Bulk Assignment, if you turn it on | Reads (`GET`) policies, assignments, groups, filters and scope tags, then `POST …/assign` and `PATCH` (scope tags) on `graph.microsoft.com`, with the portal session | The policies you check, with their existing assignments |
+| Scope Tags Clean up, if you turn it on | Reads (`GET`) policies, apps and scope tags, then `PATCH` on `graph.microsoft.com`, with the portal session | The scope tags of the objects you check |
 | Settings Explainer | Cookie-less reads of public `learn.microsoft.com/…/windows/client-management/mdm/` pages | No tenant data: only the name of the documentation page requested |
 | Tenant Guard, Setting Inspector, OpenIntuneBaseline, Change Snapshot, Set Tenant Language, PIM shortcut | None | They observe the page and the responses the portal already receives |
 
@@ -342,15 +345,37 @@ Like As-Built, it lists your policies. Instead of exporting them, it adds an ass
 
 - Code: `bulk-assign/lib.js` and `shared/assign-lib.js` (tested: `node bulk-assign/test.js`), `bulk-assign/page.js`, `shared/graph-bridge.js`, `shared/assign-form.js`.
 
+## Scope Tags Clean up
+
+**Off by default: it changes existing policies and apps.** Turn it on in ⚙, then reload the portal tab.
+
+Like As-Built, it shows a list. This one shows each policy and app holding the Default scope tag, with all its scope tags. The objects the button can act on come first.
+
+1. Click **Scope Tags**, then check the objects (search, filters by type and OS).
+2. Click **Remove Default (n)**, check the tenant and the number of objects, then click **OK**.
+
+**Supported**: settings catalog, configuration profiles, compliance, administrative templates (ADMX), PowerShell scripts, macOS shell scripts, macOS custom attributes, remediations, apps.
+
+- **The rule**: Default is removed only if another scope tag stays. An object with Default only carries the **Default only** badge. You can check it, but nothing is sent for it, and its row says so.
+- **Read just before the write**: the real state of the object decides, not the list shown. If its other scope tag has gone in the meantime, nothing is sent.
+- **Only Default is removed**: the other scope tags stay.
+- **Effect**: admins limited to the Default scope tag will no longer see these objects. The dialog says so before OK.
+- **List**: objects without Default are not in it. Those with unreadable scope tags are counted in the status line, and a type the token cannot write is named there.
+- **Unknown result** (5xx error, network failure): check in the portal before running again. An expired session stops the series.
+- **Permissions**: `DeviceManagementConfiguration.ReadWrite.All` (profiles, catalog, compliance, ADMX), `DeviceManagementScripts.ReadWrite.All` (scripts, remediations), `DeviceManagementApps.ReadWrite.All` (apps).
+- **Log**: Change Snapshot logs policies, without one ticket card per object. It does not track apps yet: their changes do not appear in it.
+
+- Code: `scope-cleanup/lib.js` (tested: `node scope-cleanup/test.js`), `scope-cleanup/page.js`, `shared/graph-bridge.js`.
+
 ## Moving panels
 
-As-Built, Assignment Lens, Policy Import and Bulk Assignment do not open at the same time: opening one closes the others.
+As-Built, Assignment Lens, Policy Import, Bulk Assignment and Scope Tags Clean up do not open at the same time: opening one closes the others.
 
 The As-Built and Assignment Lens buttons and panels can be moved with the mouse (button: drag; panel: drag the header). The position is stored per element in the portal's `localStorage` (`tenant-compass:pos:*` keys), shared code in `shared/drag.js`. The **Reset positions** button in the menu clears these keys in the active tab and reloads it.
 
 ## How it works
 
-`background.js` dynamically registers (`chrome.scripting.registerContentScripts`) the scripts of the checked features, based on the `chrome.storage.sync` key `features` (all on by default, except Policy Import and Bulk Assignment). Each feature lives in its own folder (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), with a `lib.js` testable under Node and a `test.js`. The shared style (#0078d4 → #5b5fc7 gradient) and dragging (`shared/drag.js`) are common. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
+`background.js` dynamically registers (`chrome.scripting.registerContentScripts`) the scripts of the checked features, based on the `chrome.storage.sync` key `features` (all on by default, except Policy Import, Bulk Assignment and Scope Tags Clean up). Each feature lives in its own folder (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), with a `lib.js` testable under Node and a `test.js`. The shared style (#0078d4 → #5b5fc7 gradient) and dragging (`shared/drag.js`) are common. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Limitations
 
@@ -373,6 +398,7 @@ cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
 cd ../policy-import && node test.js
 cd ../bulk-assign && node test.js
+cd ../scope-cleanup && node test.js
 ```
 
 ## License

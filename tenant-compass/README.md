@@ -2,7 +2,7 @@
 
 *Boîte à outils pour le portail Microsoft Intune.* · [English version](README.en.md)
 
-Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, Raccourci PIM, Policy Import et Bulk Assignment réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
+Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, Raccourci PIM, Policy Import, Bulk Assignment et Scope Tags Clean up réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
 
 Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -29,6 +29,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 - [Raccourci PIM](#raccourci-pim)
 - [Policy Import](#policy-import)
 - [Bulk Assignment](#bulk-assignment)
+- [Scope Tags Clean up](#scope-tags-clean-up)
 - [Déplacement](#déplacement)
 - [Fonctionnement](#fonctionnement)
 - [Limites](#limites)
@@ -49,6 +50,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives) sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible et 🔑 PIM actif du menu |
 | Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec groupe et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, à droite d'As-Built (Intune) |
 | Bulk Assignment | Ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. **Écrit dans le tenant : désactivée par défaut** | Bouton Bulk Assign, à droite d'Import (Intune) |
+| Scope Tags Clean up | Retire le scope tag Default des stratégies et applications qui ont un autre scope tag. **Écrit dans le tenant : désactivée par défaut** | Bouton Scope Tags, à droite de Bulk Assign (Intune) |
 
 ## Installation
 
@@ -66,6 +68,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | As-Built, Assignment Lens | Lectures (`GET`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies, applications et groupes affichés, comme le fait le portail |
 | Policy Import, si vous l'activez | Lecture des noms existants (`GET`) et création (`POST`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies des fichiers que vous choisissez et confirmez, et si vous le demandez leur groupe et leurs scope tags |
 | Bulk Assignment, si vous l'activez | Lectures (`GET`) des stratégies, affectations, groupes, filtres et scope tags, puis `POST …/assign` et `PATCH` (scope tags) sur `graph.microsoft.com`, avec la session du portail | Les stratégies que vous cochez, avec leurs affectations existantes |
+| Scope Tags Clean up, si vous l'activez | Lectures (`GET`) des stratégies, applications et scope tags, puis `PATCH` sur `graph.microsoft.com`, avec la session du portail | Les scope tags des objets que vous cochez |
 | Settings Explainer | Lecture sans cookie de pages publiques `learn.microsoft.com/…/windows/client-management/mdm/` | Aucune donnée du tenant : seulement le nom de la page de documentation demandée |
 | Tenant Guard, Setting Inspector, OpenIntuneBaseline, Change Snapshot, Set Tenant Language, Raccourci PIM | Aucun | Ils observent la page et les réponses que le portail reçoit déjà |
 
@@ -344,15 +347,37 @@ Comme As-Built, elle liste vos stratégies. Au lieu de les exporter, elle leur a
 
 - Code : `bulk-assign/lib.js` et `shared/assign-lib.js` (testés : `node bulk-assign/test.js`), `bulk-assign/page.js`, `shared/graph-bridge.js`, `shared/assign-form.js`.
 
+## Scope Tags Clean up
+
+**Désactivée par défaut : elle modifie des stratégies et des applications existantes.** Activez-la dans ⚙, puis rechargez l'onglet du portail.
+
+Comme As-Built, elle affiche une liste. Celle-ci montre chaque stratégie et application qui porte le scope tag Default, avec tous ses scope tags. Les objets sur lesquels le bouton peut agir viennent en premier.
+
+1. Cliquer sur **Scope Tags**, puis cocher les objets (recherche, filtres par type et par OS).
+2. Cliquer sur **Retirer Default (n)**, vérifier le tenant et le nombre d'objets, puis cliquer sur **OK**.
+
+**Pris en charge** : catalogue de paramètres, profils de configuration, conformité, modèles d'administration (ADMX), scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, remédiations, applications.
+
+- **La règle** : Default n'est retiré que si un autre scope tag reste. Un objet qui n'a que Default porte la balise **Default seul**. Vous pouvez le cocher, mais rien n'est envoyé pour lui, et sa ligne l'indique.
+- **Relecture juste avant l'écriture** : c'est l'état réel de l'objet qui décide, pas la liste affichée. Si son autre scope tag a disparu entre-temps, rien n'est envoyé.
+- **Seul Default est retiré** : les autres scope tags restent.
+- **Effet** : les administrateurs limités au scope tag Default ne verront plus ces objets. Le dialogue le rappelle avant OK.
+- **Liste** : les objets sans Default n'y figurent pas. Ceux dont les scope tags sont illisibles sont comptés dans la ligne d'état, et un type que le jeton ne peut pas écrire y est nommé.
+- **Résultat inconnu** (erreur 5xx, coupure réseau) : vérifiez dans le portail avant de relancer. Une session expirée arrête la série.
+- **Droits** : `DeviceManagementConfiguration.ReadWrite.All` (profils, catalogue, conformité, ADMX), `DeviceManagementScripts.ReadWrite.All` (scripts, remédiations), `DeviceManagementApps.ReadWrite.All` (applications).
+- **Journal** : Change Snapshot journalise les stratégies, sans carte de ticket par objet. Il ne suit pas encore les applications : leurs changements n'y apparaissent pas.
+
+- Code : `scope-cleanup/lib.js` (testé : `node scope-cleanup/test.js`), `scope-cleanup/page.js`, `shared/graph-bridge.js`.
+
 ## Déplacement
 
-As-Built, Assignment Lens, Policy Import et Bulk Assignment ne s'ouvrent pas en même temps : ouvrir l'un referme les autres.
+As-Built, Assignment Lens, Policy Import, Bulk Assignment et Scope Tags Clean up ne s'ouvrent pas en même temps : ouvrir l'un referme les autres.
 
 Les boutons et panneaux d'As-Built et d'Assignment Lens se déplacent à la souris (bouton : glisser ; panneau : glisser l'en-tête). Position mémorisée par élément dans le `localStorage` du portail (clés `tenant-compass:pos:*`), code commun dans `shared/drag.js`. Bouton **Positions par défaut** dans le menu : efface ces clés dans l'onglet actif et le recharge.
 
 ## Fonctionnement
 
-`background.js` enregistre dynamiquement (`chrome.scripting.registerContentScripts`) les scripts des fonctions cochées, d'après `chrome.storage.sync` clé `features` (toutes actives par défaut, sauf Policy Import et Bulk Assignment). Chaque fonction vit dans son dossier (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), avec un `lib.js` testable sous Node et un `test.js`. Le style commun (dégradé #0078d4 → #5b5fc7) et le déplacement (`shared/drag.js`) sont partagés. Détails : [ARCHITECTURE.md](ARCHITECTURE.md).
+`background.js` enregistre dynamiquement (`chrome.scripting.registerContentScripts`) les scripts des fonctions cochées, d'après `chrome.storage.sync` clé `features` (toutes actives par défaut, sauf Policy Import, Bulk Assignment et Scope Tags Clean up). Chaque fonction vit dans son dossier (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), avec un `lib.js` testable sous Node et un `test.js`. Le style commun (dégradé #0078d4 → #5b5fc7) et le déplacement (`shared/drag.js`) sont partagés. Détails : [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Limites
 
@@ -375,6 +400,7 @@ cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
 cd ../policy-import && node test.js
 cd ../bulk-assign && node test.js
+cd ../scope-cleanup && node test.js
 ```
 
 ## Licence
