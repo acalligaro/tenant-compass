@@ -38,6 +38,9 @@
     return list.some(t => t !== DEFAULT) ? 'removable' : 'onlyDefault';
   }
 
+  // The filter on objects holding Default and another tag. A row already processed stays, to show its result.
+  const keepRow = (tags, processed, onlyRemovable) => !onlyRemovable || processed || stateOf(tags) === 'removable';
+
   // What to do with an object just read. A body exists only when another tag stays.
   function cleanPlan(kind, policy) {
     const tags = tagsIn(policy), state = stateOf(tags);
@@ -100,7 +103,7 @@
     return out;
   }
 
-  const api = { KINDS: [...KINDS.keys()], DEFAULT, itemUrl, listUrl, kindsFor, tagsIn, stateOf, cleanPlan, loadKind, resolveTags, cleanLine, runClean };
+  const api = { KINDS: [...KINDS.keys()], DEFAULT, itemUrl, listUrl, kindsFor, tagsIn, stateOf, keepRow, cleanPlan, loadKind, resolveTags, cleanLine, runClean };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.ScopeCleanupLib = api; // always: a stray `module` global must not hide the lib from the page
 })();

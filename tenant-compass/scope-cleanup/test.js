@@ -30,6 +30,12 @@ assert.deepStrictEqual(C.cleanPlan('ps', { roleScopeTagIds: ['0', '5'] }).body, 
 // Never an empty list, whatever the input
 for (const tags of [['0'], ['0', '0'], [0], ['0', 0]]) assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: tags }).action, 'onlyDefault', JSON.stringify(tags));
 
+// The "Default + another tag" filter: Default only goes away, a row already processed stays to show its result
+assert.strictEqual(C.keepRow(['0', '5'], false, true), true);
+assert.strictEqual(C.keepRow(['0'], false, true), false);
+assert.strictEqual(C.keepRow(['5'], true, true), true); // Default just removed: the result stays visible
+assert.strictEqual(C.keepRow(['0'], false, false), true); // filter off: everything
+
 // ---------- closed tables ----------
 
 const KINDS = ['sc', 'dc', 'comp', 'admx', 'ps', 'sh', 'cattr', 'rem', 'app'];

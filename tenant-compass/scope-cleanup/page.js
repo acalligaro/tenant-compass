@@ -58,9 +58,11 @@
     .card h2 { margin: 0; font-size: 16px; font-weight: 600; }
     .card p { margin: 0; overflow-wrap: anywhere; }
     .card .btns { display: flex; gap: 8px; }
+    .opt { display: flex; gap: 8px; align-items: center; color: #484644; font-size: 12px; cursor: pointer; }
+    .opt input { margin: 0; }
   `);
 
-  let panel = null, poll = 0, running = false, items = null, lastStatus = '', tagNames = new Map();
+  let panel = null, poll = 0, running = false, items = null, lastStatus = '', tagNames = new Map(), onlyRemovable = false;
   const checked = new Set(), results = new Map(), ui = {};
 
   const directoryName = () => document.querySelector('.fxs-avatarmenu-tenant')?.textContent.trim() || '';
@@ -70,8 +72,11 @@
 
   function visible() {
     const q = ui.search.value.trim().toLowerCase(), kind = ui.type.value, os = ui.os.value;
-    return (items || []).filter(i => (!kind || i.kind === kind) && (!os || S.platformsOf(i).includes(os)) && (!q || String(i.name).toLowerCase().includes(q)));
+    return (items || []).filter(i => (!kind || i.kind === kind) && (!os || S.platformsOf(i).includes(os)) && (!q || String(i.name).toLowerCase().includes(q)) && C.keepRow(i.tags, results.has(i.key), onlyRemovable));
   }
+
+  // What "check all" takes: with the filter on, only the objects the button can act on, not the rows already processed.
+  const checkable = () => visible().filter(i => !onlyRemovable || C.stateOf(i.tags) === 'removable');
 
   function resultNote(r) {
     if (!r) return [];
@@ -98,7 +103,9 @@
     const n = selected().length;
     ui.go.textContent = T('scopeCleanup.ui.go', { n });
     ui.go.disabled = running || !n;
-    const shown = visible();
+    ui.onlyBox.disabled = running;
+    ui.onlyText.textContent = T('scopeCleanup.ui.onlyRemovable', { n: (items || []).filter(i => C.stateOf(i.tags) === 'removable').length });
+    const shown = checkable();
     ui.all.disabled = running || !shown.length;
     ui.all.checked = !!shown.length && shown.every(i => checked.has(i.key));
   }
@@ -180,11 +187,18 @@
     ui.tenant = el('div', { textContent: T('scopeCleanup.status.searching') });
     ui.search = el('input', { type: 'search', placeholder: T('scopeCleanup.ui.search'), title: T('scopeCleanup.ui.search'), oninput: renderList });
     ui.all = el('input', { type: 'checkbox', title: T('scopeCleanup.ui.selectAll'), onchange: () => {
-      for (const i of visible()) ui.all.checked ? checked.add(i.key) : checked.delete(i.key);
+      for (const i of checkable()) ui.all.checked ? checked.add(i.key) : checked.delete(i.key);
       renderList();
     } });
     ui.type = el('select', { onchange: renderList }, el('option', { value: '', textContent: T('scopeCleanup.ui.allTypes') }), ...C.KINDS.map(k => el('option', { value: k, textContent: T('asBuilt.src.' + k) })));
     ui.os = el('select', { onchange: renderList }, el('option', { value: '', textContent: T('scopeCleanup.ui.allOs') }));
+    ui.onlyBox = el('input', { type: 'checkbox', checked: onlyRemovable, onchange: () => {
+      onlyRemovable = ui.onlyBox.checked;
+      // A hidden Default only row must not stay checked: the count on the button is what gets processed.
+      if (onlyRemovable) for (const i of items || []) if (C.stateOf(i.tags) === 'onlyDefault') checked.delete(i.key);
+      renderList();
+    } });
+    ui.onlyText = el('span');
     ui.list = el('div', { className: 'list' });
     ui.fill = el('i');
     ui.progress = el('div', { className: 'progress' }, ui.fill);
@@ -192,7 +206,7 @@
     ui.go = el('button', { className: 'act', disabled: true, textContent: T('scopeCleanup.ui.go', { n: 0 }), onclick: askConfirm });
     const head = el('div', { className: 'head', title: T('scopeCleanup.ui.drag') }, T('scopeCleanup.ui.title'), el('button', { className: 'x', textContent: '×', title: T('scopeCleanup.ui.close'), onclick: toggle }));
     panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.all, ui.search),
-      el('div', { className: 'bar' }, ui.type, ui.os), ui.list, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
+      el('div', { className: 'bar' }, ui.type, ui.os), el('div', { className: 'bar' }, el('label', { className: 'opt' }, ui.onlyBox, ui.onlyText)), ui.list, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
     ui.root.append(panel);
     opened();
     if (window.__tenantCompassDrag) window.__tenantCompassDrag(panel, head, 'scope-cleanup-panel');

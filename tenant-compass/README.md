@@ -358,6 +358,7 @@ Comme As-Built, elle affiche une liste. Celle-ci montre chaque stratégie et app
 
 **Pris en charge** : catalogue de paramètres, profils de configuration, conformité, modèles d'administration (ADMX), scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, remédiations, applications.
 
+- **Sélection rapide** : la case **Seulement Default + un autre scope tag** ne garde que les objets à nettoyer. La case **Tout cocher** les prend alors tous d'un coup.
 - **La règle** : Default n'est retiré que si un autre scope tag reste. Un objet qui n'a que Default porte la balise **Default seul**. Vous pouvez le cocher, mais rien n'est envoyé pour lui, et sa ligne l'indique.
 - **Relecture juste avant l'écriture** : c'est l'état réel de l'objet qui décide, pas la liste affichée. Si son autre scope tag a disparu entre-temps, rien n'est envoyé.
 - **Seul Default est retiré** : les autres scope tags restent.

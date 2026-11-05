@@ -356,6 +356,7 @@ Like As-Built, it shows a list. This one shows each policy and app holding the D
 
 **Supported**: settings catalog, configuration profiles, compliance, administrative templates (ADMX), PowerShell scripts, macOS shell scripts, macOS custom attributes, remediations, apps.
 
+- **Quick selection**: the **Only Default + another scope tag** box keeps only the objects to clean. The **check all** box then takes them all at once.
 - **The rule**: Default is removed only if another scope tag stays. An object with Default only carries the **Default only** badge. You can check it, but nothing is sent for it, and its row says so.
 - **Read just before the write**: the real state of the object decides, not the list shown. If its other scope tag has gone in the meantime, nothing is sent.
 - **Only Default is removed**: the other scope tags stay.
