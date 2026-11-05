@@ -83,7 +83,29 @@
     return list.map(g => ({ id: g.id, name: g.displayName }));
   }
 
-  const api = { KINDS: [...KINDS.keys()], TAGS_URL: `${GRAPH}roleScopeTags`, FILTERS_URL: `${GRAPH}assignmentFilters`,
+  // ---------- retry rules of the writing features ----------
+
+  const ok = r => r.status >= 200 && r.status < 300;
+  const MAX_RETRIES = 2, DEFAULT_WAIT_S = 10;
+
+  // Only 429 is retried. pause is optional: a single line in a test does not wait.
+  async function withRetry(fn, pause) {
+    for (let tries = 0; ; tries++) {
+      let r;
+      try { r = await fn(); } catch { r = { status: 0 }; }
+      if (r.status !== 429 || tries === MAX_RETRIES || !pause) return r;
+      await pause(1000 * (r.retryAfter > 0 ? r.retryAfter : DEFAULT_WAIT_S));
+    }
+  }
+
+  const refused = r => (r.status === 401
+    ? { status: 'failed', error: 'assignForm.err.expired', expired: true }
+    : { status: 'failed', error: r.message || (r.status ? `Graph ${r.status}` : 'assignForm.err.network') });
+
+  // After a write left: 5xx or a network failure may hide a success.
+  const writeResult = r => (ok(r) ? { status: 'done' } : !r.status || r.status >= 500 ? { status: 'unknown' } : refused(r));
+
+  const api = { withRetry, refused, writeResult, KINDS: [...KINDS.keys()], TAGS_URL: `${GRAPH}roleScopeTags`, FILTERS_URL: `${GRAPH}assignmentFilters`,
     assignable, supportsFilter, policyUrl, assignUrl, existingUrl, targetOf, hasFilter, assignmentsIn, mergeTargets, newAssignment, tagsPatch, groupsUrl, groupsIn };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.TenantCompassAssign = api; // always: a stray `module` global must not hide the lib from the page

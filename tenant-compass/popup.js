@@ -1,7 +1,7 @@
 // Feature menu. Main view: active features (chips), Tenant Guard current tab and rules; ⚙ opens the settings (feature toggles, positions).⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
 // background.js re-registers content scripts when `features` changes; open tabs need a reload. Strings: shared/i18n.js.
 
-const DEFAULTS = { tenantGuard: true, asBuilt: true, settingInspector: true, settingsExplainer: true, oibRecommendations: true, assignmentLens: true, changeSnapshot: true, portalLanguage: true, pim: true, policyImport: false, bulkAssign: false }; // keep in sync with background.js
+const DEFAULTS = { tenantGuard: true, asBuilt: true, settingInspector: true, settingsExplainer: true, oibRecommendations: true, assignmentLens: true, changeSnapshot: true, portalLanguage: true, pim: true, policyImport: false, bulkAssign: false, scopeCleanup: false }; // keep in sync with background.js
 // Set Tenant Language: two presets (language 1 / language 2), one button each.
 const PL_DEFAULT = [{ lang: 'fr', format: 'fr-fr' }, { lang: 'en', format: 'en-us' }];
 let portalLangs = PL_DEFAULT.map(p => ({ ...p }));

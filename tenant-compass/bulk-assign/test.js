@@ -158,7 +158,7 @@ assert.deepStrictEqual(A.groupsIn(null), []);
   f = fake({ existing: [{ status: 401 }, { status: 200, body: {} }] });
   out = await B.runBulk(items, plan, f.call, opts);
   assert.deepStrictEqual(out.map(x => x.assign.status), ['failed', 'notSent']);
-  assert.strictEqual(out[0].assign.error, 'bulkAssign.err.expired');
+  assert.strictEqual(out[0].assign.error, 'assignForm.err.expired');
   assert.strictEqual(f.calls.length, 1);
   // Progress after each line
   const seen = [];

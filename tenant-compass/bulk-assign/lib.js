@@ -3,7 +3,7 @@
 (() => {
   const A = globalThis.TenantCompassAssign || require('../shared/assign-lib.js');
   const GRAPH = 'https://graph.microsoft.com/beta/deviceManagement/';
-  const PAUSE_MS = 250, MAX_RETRIES = 2, DEFAULT_WAIT_S = 10;
+  const PAUSE_MS = 250;
   const FIELDS = '?$select=id,displayName,description,lastModifiedDateTime';
 
   // Same lists as As-Built, for the types /assign can take without more input.
@@ -15,22 +15,7 @@
 
   const ok = r => r.status >= 200 && r.status < 300;
 
-  // Only 429 is⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ retried. pause is optional: a single line in a test does not wait.
-  async function withRetry(fn, pause) {
-    for (let tries = 0; ; tries++) {
-      let r;
-      try { r = await fn(); } catch { r = { status: 0 }; }
-      if (r.status !== 429 || tries === MAX_RETRIES || !pause) return r;
-      await pause(1000 * (r.retryAfter > 0 ? r.retryAfter : DEFAULT_WAIT_S));
-    }
-  }
-
-  const refused = r => (r.status === 401
-    ? { status: 'failed', error: 'bulkAssign.err.expired', expired: true }
-    : { status: 'failed', error: r.message || (r.status ? `Graph ${r.status}` : 'bulkAssign.err.network') });
-
-  // After a write left: 5xx or a network failure may hide a success.
-  const writeResult = r => (ok(r) ? { status: 'done' } : !r.status || r.status >= 500 ? { status: 'unknown' } : refused(r));
+  const { withRetry, refused, writeResult } = A;
 
   async function assignLine({ kind, id }, target, tid, call, pause) {
     if (A.hasFilter(target) && !A.supportsFilter(kind)) return { status: 'skipped', error: 'bulkAssign.err.noFilter' }; // without its filter, it would reach more devices than asked

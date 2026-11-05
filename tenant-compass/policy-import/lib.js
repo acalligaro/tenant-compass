@@ -147,11 +147,15 @@
   }
 
   // Tenant and importable types of a token. Expired or other audience: no type. The token itself is not kept or returned.
-  function tokenInfo(token, now = Date.now()) {
+  function tokenScopes(token, now = Date.now()) {
     const c = jwtClaims(token);
     const usable = /^https:\/\/graph\.microsoft\.com\/?$/.test(c.aud || '') && c.exp * 1000 > now;
-    const scopes = usable ? String(c.scp || '').split(/\s+/) : [];
-    return { tid: typeof c.tid === 'string' ? c.tid : null, kinds: [...KINDS].filter(([, v]) => scopes.includes(v.scope)).map(([k]) => k) };
+    return { tid: typeof c.tid === 'string' ? c.tid : null, scopes: usable ? String(c.scp || '').split(/\s+/) : [] };
+  }
+
+  function tokenInfo(token, now = Date.now()) {
+    const { tid, scopes } = tokenScopes(token, now);
+    return { tid, kinds: [...KINDS].filter(([, v]) => scopes.includes(v.scope)).map(([k]) => k) };
   }
 
   // JWT strings in a message (the shell hands tokens to its extension Web Worker over MessagePort), at most 6 levels deep.
@@ -235,7 +239,7 @@
     return out;
   }
 
-  const api = { MAX_FILE_BYTES, parseFile, prepare, endpointFor, nameField, namesUrl, tokenInfo, jwtsIn, markDuplicates, applyPrefix, applyTags, assignPlan, runImport };
+  const api = { MAX_FILE_BYTES, parseFile, prepare, endpointFor, nameField, namesUrl, tokenInfo, tokenScopes, jwtsIn, markDuplicates, applyPrefix, applyTags, assignPlan, runImport };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.PolicyImportLib = api; // always: a stray `module` global must not hide the lib from the page
 })();

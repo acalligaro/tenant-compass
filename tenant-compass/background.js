@@ -97,9 +97,17 @@ const SCRIPTS = {
     runAt: 'document_start',
     world: 'MAIN',
   }],
+  scopeCleanup: [{
+    id: 'scope-cleanup',
+    matches: ['https://intune.microsoft.com/*', 'https://endpoint.microsoft.com/*', 'https://*.portal.azure.net/*'],
+    js: ['shared/drag.js', 'shared/graph-bridge.js', 'shared/assign-lib.js', 'shared/assign-i18n.js', 'as-built/i18n.js', 'as-built/lib.js', 'policy-import/lib.js', 'scope-cleanup/lib.js', 'scope-cleanup/page.js'],
+    allFrames: true,
+    runAt: 'document_start',
+    world: 'MAIN',
+  }],
 };
-// policyImport and bulkAssign write to the tenant: an explicit choice, the only features off by default. portalLanguage, pim: popup-only, no content script.
-const DEFAULTS = { tenantGuard: true, asBuilt: true, settingInspector: true, settingsExplainer: true, oibRecommendations: true, assignmentLens: true, changeSnapshot: true, portalLanguage: true, pim: true, policyImport: false, bulkAssign: false };
+// policyImport, bulkAssign and scopeCleanup write to the tenant: an explicit choice, the only features off by default. portalLanguage, pim: popup-only, no content script.
+const DEFAULTS = { tenantGuard: true, asBuilt: true, settingInspector: true, settingsExplainer: true, oibRecommendations: true, assignmentLens: true, changeSnapshot: true, portalLanguage: true, pim: true, policyImport: false, bulkAssign: false, scopeCleanup: false };
 
 // UI language of the in-page features: a marker script sets <html data-tenant-compass-lang>, read by shared/i18n-page.js
 // in every world. Each feature script also gets the shared helper and its own dictionary (<feature>/i18n.js).⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
