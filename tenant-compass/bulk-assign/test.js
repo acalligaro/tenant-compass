@@ -22,6 +22,10 @@ assert.strictEqual(A.policyUrl('app', 'x'), null);
 assert.strictEqual(A.existingUrl('sc', 'x'), BASE + 'configurationPolicies/x/assignments');
 for (const k of ['dc', 'comp', 'admx', 'ps', 'sh', 'cattr']) assert.ok(A.existingUrl(k, 'x').endsWith('/x?$expand=assignments'), k);
 
+// Same plain reads as Assignment Lens, Intune-Toolkit and Learn: no $select on these lists
+assert.strictEqual(A.FILTERS_URL, BASE + 'assignmentFilters');
+assert.strictEqual(A.TAGS_URL, BASE + 'roleScopeTags');
+
 // ---------- targets ----------
 
 assert.deepStrictEqual(A.targetOf({ mode: 'group', groupId: 'g1' }), { '@odata.type': G + 'groupAssignmentTarget', groupId: 'g1' });

@@ -83,7 +83,7 @@
     return list.map(g => ({ id: g.id, name: g.displayName }));
   }
 
-  const api = { KINDS: [...KINDS.keys()], TAGS_URL: `${GRAPH}roleScopeTags?$select=id,displayName`, FILTERS_URL: `${GRAPH}assignmentFilters?$select=id,displayName,platform`,
+  const api = { KINDS: [...KINDS.keys()], TAGS_URL: `${GRAPH}roleScopeTags`, FILTERS_URL: `${GRAPH}assignmentFilters`,
     assignable, supportsFilter, policyUrl, assignUrl, existingUrl, targetOf, hasFilter, assignmentsIn, mergeTargets, newAssignment, tagsPatch, groupsUrl, groupsIn };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.TenantCompassAssign = api; // always: a stray `module` global must not hide the lib from the page

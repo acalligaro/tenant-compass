@@ -22,7 +22,8 @@
 
     const field = (label, ...kids) => el('div', { className: 'field' }, el('span', { textContent: label }), ...kids);
     const groupRow = el('div', { className: 'field' }, el('span'), search, group, hint);
-    const filterRow = field(T('assignForm.filter'), filter, filterMode);
+    const filterHint = el('small', { className: 'hint' });
+    const filterRow = field(T('assignForm.filter'), filter, filterMode, filterHint);
     const root = el('div', { className: 'form' }, field(T('assignForm.target'), mode), groupRow, ...(filters ? [filterRow] : []), field(T('assignForm.tags'), tags, tagsHint));
 
     function sync() {
@@ -51,6 +52,7 @@
       const kept = selected(tags);
       tags.replaceChildren(...(ok(t) ? t.body.value : []).map(x => el('option', { value: String(x.id), textContent: x.displayName, selected: kept.includes(String(x.id)) })));
       tagsHint.textContent = ok(t) ? '' : T('assignForm.tagsFailed');
+      filterHint.textContent = !ok(f) ? T('assignForm.filtersFailed', { error: f.message || `Graph ${f.status}` }) : f.body.value.length ? '' : T('assignForm.noFilters');
       if (ok(f)) filter.replaceChildren(option('', T('assignForm.noFilter')), ...f.body.value.map(x => option(x.id, x.platform ? `${x.displayName} (${x.platform})` : x.displayName)));
       changed();
     }
