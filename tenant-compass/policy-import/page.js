@@ -1,71 +1,18 @@
-// MAIN world, every frame of the Intune portal. Off by⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ default: this is the only feature that writes to the tenant.
-// All frames: observe the bearer token the portal⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ sends to graph.microsoft.com (memory only) and answer the top frame's relay.
-// Top frame:⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ floating button, file picker, preview, confirmation, creation of the checked policies.
-// Writes: one POST per policy to a closed list of collections (lib.js). Nothing is updated, deleted or assigned.
+// MAIN world, every frame of the Intune portal. Off by default: it writes to the tenant.
+// All frames: the Graph bridge observes the portal's token and serves the top frame.
+// Top frame: floating button, file picker, preview, confirmation, creation of the checked policies.
+// Writes: one POST per policy to a closed list of collections (lib.js), then one assignment when the user chose a group. Nothing⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ is updated or deleted.
 (() => {
-  const L = globalThis.PolicyImportLib;
-  if (!L) return;
+  const L = globalThis.PolicyImportLib, A = globalThis.TenantCompassAssign, bridge = window.__tenantCompassGraphBridge;
+  if (!L || !A || !bridge) return;
   const T = (k, v) => (globalThis.__tenantCompassI18n ? globalThis.__tenantCompassI18n.t(k, v) : k);
-  const UI_ORIGINS = ['https://intune.microsoft.com', 'https://endpoint.microsoft.com'];
-  const FRAME_ORIGIN = /^https:\/\/((intune|endpoint)\.microsoft\.com|([\w-]+\.)*portal\.azure\.net)$/;
-  const isTop = window === window.top;
-  // Token⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ per importable type: never persisted, never logged, never posted to another frame.
-  const tokens = new Map();
-
-  // ---------- token observation ----------
-
-  const keep = t => { for (const k of L.tokenInfo(t).kinds) tokens.set(k, t); };
-  function grab(url, auth) {
-    try {
-      if (!auth || !/^Bearer\s+\S/i.test(auth) || new URL(url, location.href).origin !== 'https://graph.microsoft.com') return;
-      keep(auth.replace(/^Bearer\s+/i, ''));
-    } catch {}
-  }
-
-  // The shell hands tokens to its extension Web Worker over MessagePort: read them on the way.
-  if (isTop) for (const P of [MessagePort.prototype, Worker.prototype]) {
-    const send = P.postMessage;
-    P.postMessage = function (data) {
-      try { L.jwtsIn(data).forEach(keep); } catch {}
-      return send.apply(this, arguments);
-    };
-  }
-
-  const prevFetch = window.fetch;
-  window.fetch = function (input, init) {
-    try {
-      const req = input instanceof Request ? input : null;
-      grab(req ? req.url : String(input), new Headers(init?.headers || req?.headers).get('authorization'));
-    } catch {}
-    return prevFetch.apply(this, arguments);
-  };
-
-  const xhrUrl = new WeakMap();
-  const { open, setRequestHeader } = XMLHttpRequest.prototype;
-  XMLHttpRequest.prototype.open = function (method, url) {
-    xhrUrl.set(this, String(url));
-    return open.apply(this, arguments);
-  };
-  XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
-    if (/^authorization$/i.test(name)) grab(xhrUrl.get(this), value);
-    return setRequestHeader.apply(this, arguments);
-  };
-
-  // Types this frame can write, with their tenant ID: all that ever leaves a frame, never the token.
-  function ownKinds() {
-    const out = {};
-    for (const [k, t] of tokens) {
-      const info = L.tokenInfo(t);
-      if (info.tid && info.kinds.includes(k)) out[k] = info.tid;
-    }
-    return out;
-  }
+  const ok2xx = r => r.status >= 200 && r.status < 300;
 
   // ---------- Graph calls: window.fetch read at call time, so Change Snapshot logs each creation ----------
 
-  async function readNames(kind) {
-    const token = tokens.get(kind), field = L.nameField(kind), names = [];
-    if (!token || !field) return { status: 403 };
+  async function readNames(token, kind) {
+    const field = L.nameField(kind), names = [];
+    if (!field) return { status: 403 };
     try {
       for (let url = L.namesUrl(kind); url;) {
         const r = await window.fetch(url, { method: 'GET', credentials: 'omit', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
@@ -80,11 +27,10 @@
     return { status: 200, names };
   }
 
-  // The only write of the extension. The URL comes from the type table, and the token must still belong to the confirmed tenant.
-  async function createPolicy(kind, body, tid) {
-    const url = L.endpointFor(kind), token = tokens.get(kind);
-    if (!url || !token) return { status: 403, message: T('policyImport.err.noWriteToken') };
-    if (L.tokenInfo(token).tid !== tid) return { status: 403, message: T('policyImport.err.tenantChanged') };
+  // The URL comes from the⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ type table. The bridge has already checked that the token belongs to the confirmed tenant.
+  async function createPolicy(token, kind, { body }) {
+    const url = L.endpointFor(kind);
+    if (!url) return { status: 403, message: T('assignForm.noToken') };
     try {
       const r = await window.fetch(url, { method: 'POST', credentials: 'omit', tenantCompassSilent: true,
         headers: { Authorization: 'Bearer ' + token, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -93,68 +39,10 @@
     } catch { return { status: 0 }; }
   }
 
-  // ---------- relay: child frames⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ serve the top frame ----------
-
-  if (!isTop) {
-    window.addEventListener('message', async e => {
-      const m = e.data;
-      if (!m || typeof m.policyImport !== 'string' || e.source !== window.top || !UI_ORIGINS.includes(e.origin)) return;
-      if (m.policyImport === 'ping') {
-        const kinds = ownKinds();
-        if (Object.keys(kinds).length) e.source.postMessage({ policyImport: 'pong', kinds }, e.origin);
-        return;
-      }
-      if (!L.endpointFor(m.kind)) return; // the message never carries a URL
-      const res = m.policyImport === 'names' ? await readNames(m.kind) : m.policyImport === 'post' ? await createPolicy(m.kind, m.body, m.tid) : null;
-      if (res) e.source.postMessage({ policyImport: 'res', id: m.id, res }, e.origin); // res has its own id: the created object's
-    });
-    return;
-  }
-  if (!UI_ORIGINS.includes(location.origin)) return;
-
-  const routes = new Map(); // type -> { tid, win, origin }, no win: this frame holds the token
-  const pending = new Map();
-  let seq = 0;
-
-  window.addEventListener('message', e => {
-    const m = e.data;
-    if (!m || typeof m.policyImport !== 'string' || e.source === window || !FRAME_ORIGIN.test(e.origin)) return;
-    if (m.policyImport === 'pong' && m.kinds && typeof m.kinds === 'object') {
-      for (const [k, tid] of Object.entries(m.kinds)) if (L.endpointFor(k) && typeof tid === 'string' && !routes.has(k)) routes.set(k, { tid, win: e.source, origin: e.origin });
-    }
-    if (m.policyImport === 'res' && pending.get(m.id)?.win === e.source) { pending.get(m.id).done(m.res); pending.delete(m.id); }
-  });
-
-  function allFrames(w = window, out = []) {
-    for (let i = 0; i < w.length; i++) { out.push(w[i]); allFrames(w[i], out); }
-    return out;
-  }
-
+  const info = t => { const i = L.tokenInfo(t); return i.kinds.length ? { tid: i.tid, kinds: [...i.kinds, 'meta'] } : i; };
+  const graph = bridge({ channel: 'policyImport', info, jwtsIn: L.jwtsIn, ops: { ...bridge.assignOps(A), names: readNames, post: createPolicy } });
+  if (!graph) return;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-  async function discover() {
-    for (const [k, tid] of Object.entries(ownKinds())) routes.set(k, { tid });
-    for (const f of allFrames()) f.postMessage({ policyImport: 'ping' }, '*');
-    await sleep(400);
-  }
-
-  // Types of the first tenant found. A token of another tenant in the page is ignored, and refused by createPolicy.
-  function tenantNow() {
-    const first = routes.values().next().value;
-    return first ? { tid: first.tid, kinds: [...routes].filter(([, r]) => r.tid === first.tid).map(([k]) => k) } : null;
-  }
-
-  function relay(op, kind, extra = {}) {
-    const route = routes.get(kind);
-    if (!route) return Promise.resolve({ status: 403, message: T('policyImport.err.noWriteToken') });
-    if (!route.win) return op === 'names' ? readNames(kind) : createPolicy(kind, extra.body, extra.tid);
-    const id = ++seq;
-    return new Promise(resolve => {
-      const t = setTimeout(() => { pending.delete(id); resolve({ status: 0 }); }, 60000); // the request may have left: "unknown" for a creation
-      pending.set(id, { win: route.win, done: res => { clearTimeout(t); resolve(res || { status: 0 }); } });
-      route.win.postMessage({ policyImport: op, id, kind, ...extra }, route.origin);
-    });
-  }
 
   // ---------- UI ----------
 
@@ -200,12 +88,18 @@
     .bar input[type=text]:focus { border-color: #0078d4; box-shadow: 0 0 0 3px rgba(0,120,212,.15); background: #fff; }
     .bar input[type=text]:disabled { color: #a19f9d; }
     .card .btns { display: flex; gap: 8px; }
+    .options summary { padding: 10px 16px 0; color: #005a9e; font-size: 12px; font-weight: 600; cursor: pointer; }
+    fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+    .opt { display: flex; gap: 8px; align-items: center; padding: 8px 16px 0; color: #484644; font-size: 12px; cursor: pointer; }
+    .opt[hidden] { display: none; }
+    ${window.__tenantCompassAssignForm.css}
   `);
 
   const TYPE_KEYS = { sc: 'policyImport.type.sc', dc: 'policyImport.type.dc', comp: 'policyImport.type.comp', ps: 'policyImport.type.ps',
     sh: 'policyImport.type.sh', cattr: 'policyImport.type.cattr', rem: 'policyImport.type.rem' };
   let panel = null, poll = 0, running = false, entries = [], fileErrors = [], lastStatus = '';
-  let prepared = [], namesByKind = {}, writable = [], prefix = ''; // what the preview is rebuilt from when the prefix changes
+  let prepared = [], namesByKind = {}, writable = [], prefix = ''; // what the preview is rebuilt from when an option changes
+  let form = null, formLoaded = false;
   const ui = {};
 
   const directoryName = () => document.querySelector('.fxs-avatarmenu-tenant')?.textContent.trim() || '';
@@ -214,10 +108,13 @@
 
   function renderTenant() {
     if (!panel) return;
-    const tenant = tenantNow();
-    ui.tenant.textContent = tenant ? [directoryName(), tenant.tid].filter(Boolean).join(' · ') : T('policyImport.err.noWriteToken');
+    const tenant = graph.tenantNow();
+    ui.tenant.textContent = tenant ? [directoryName(), tenant.tid].filter(Boolean).join(' · ') : T('assignForm.noToken');
     ui.pick.disabled = running || !tenant;
   }
+
+  const assignText = a => (a.status === 'done' ? T('policyImport.res.assigned') : a.status === 'script' ? T('policyImport.res.scriptNotAssigned')
+    : a.status === 'remediation' ? T('policyImport.res.remNotAssigned') : T('policyImport.res.notAssigned', { error: a.error }));
 
   function rowOf(e) {
     const box = el('input', { type: 'checkbox', checked: e.checked, disabled: !e.body || e.locked || running, onchange: () => { e.checked = box.checked; renderRows(); } });
@@ -229,6 +126,7 @@
       const r = e.result;
       const text = r.status === 'created' ? T('policyImport.res.created', { id: r.id || '' }) : r.status === 'unknown' ? T('policyImport.res.unknown') : r.status === 'skipped' ? T('policyImport.res.skipped') : T(r.error || '');
       notes.push(el('small', { className: r.status, textContent: text }));
+      if (r.assign) notes.push(el('small', { className: r.assign.status === 'done' ? 'created' : r.assign.status === 'failed' ? 'failed' : 'unknown', textContent: assignText(r.assign) }));
     }
     return el('label', { className: 'row' }, box, el('span', {},
       e.name || e.file,
@@ -243,28 +141,29 @@
     ui.list.replaceChildren(...fileErrors.map(([file, key]) => el('div', { className: 'fileerr', textContent: `${file} : ${T(key)}` })), ...entries.map(rowOf));
     const n = selected().length, usable = entries.filter(e => e.body && !e.locked);
     ui.go.textContent = T('policyImport.ui.go', { n });
-    ui.go.disabled = running || !n;
+    ui.go.disabled = running || !n || !form.value().complete;
     ui.all.disabled = running || !usable.length;
     ui.all.checked = !!usable.length && usable.every(e => e.checked);
-    ui.prefix.disabled = running || entries.some(e => e.result); // the rows already sent keep their name: frozen until the next files
+    // The rows already sent keep their name and options: frozen until the next files.
+    ui.prefix.disabled = ui.options.disabled = running || entries.some(e => e.result);
   }
 
-  // Preview for the current prefix. A row keeps the user's choice as long as its duplicate state does not change.
+  // Preview for the current options. A row keeps the user's choice as long as its duplicate state does not change.
   function rebuild() {
     const old = entries;
-    entries = L.markDuplicates(prepared.map(e => L.applyPrefix(e, prefix)), namesByKind, writable).map((e, i) => ({ ...e, locked: false, result: null,
+    entries = L.markDuplicates(prepared.map(e => L.applyTags(L.applyPrefix(e, prefix), form.value().tagIds)), namesByKind, writable).map((e, i) => ({ ...e, locked: false, result: null,
       checked: old[i] && old[i].duplicate === e.duplicate ? old[i].checked : !!e.body && !e.duplicate }));
     const ready = entries.filter(e => e.body && !e.duplicate).length, dup = entries.filter(e => e.duplicate).length;
     setStatus(T('policyImport.status.ready', { ready, dup, blocked: entries.filter(e => !e.body).length }));
     renderRows();
   }
 
-  // Fresh preview for the chosen files. Reads the existing names of each type present; nothing is written here.
+  // Fresh preview for the chosen files. Reads the existing names of each type present; nothing is written here.⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
   async function onFiles(files) {
     if (running || !files.length) return;
     setStatus(T('policyImport.status.reading'));
-    await discover();
-    const tenant = tenantNow();
+    await graph.discover();
+    const tenant = graph.tenantNow();
     if (!tenant) { setStatus(''); renderTenant(); return; }
     const read = [], errors = [];
     for (const f of files) {
@@ -275,7 +174,7 @@
     }
     const names = {};
     for (const kind of new Set(read.filter(e => e.body && tenant.kinds.includes(e.kind)).map(e => e.kind))) {
-      const r = await relay('names', kind);
+      const r = await graph.call('names', kind);
       if (Array.isArray(r.names)) names[kind] = r.names;
     }
     prepared = read;
@@ -287,30 +186,44 @@
   }
 
   function askConfirm() {
-    const todo = selected(), tenant = tenantNow();
+    const todo = selected(), tenant = graph.tenantNow();
     if (!todo.length || !tenant) return;
-    const scripts = todo.filter(e => e.hasScript).length, shown = prefix.trimStart();
+    const v = form.value(), withScripts = ui.scripts.checked, shown = prefix.trimStart();
+    const plans = todo.map(e => L.assignPlan(e.kind, v.target, withScripts)), assigned = plans.filter(p => p === 'assign').length;
+    const scripts = todo.filter(e => e.hasScript).length, scriptsAssigned = todo.filter((e, i) => e.hasScript && plans[i] === 'assign').length;
     const close = () => dialog.remove();
     const cancel = el('button', { className: 'act ghost', textContent: T('policyImport.confirm.cancel'), onclick: close });
-    const ok = el('button', { className: 'act', textContent: T('policyImport.confirm.ok'), onclick: () => { close(); run(todo, tenant.tid); } });
+    const ok = el('button', { className: 'act', textContent: T('policyImport.confirm.ok'), onclick: () => { close(); run(todo, tenant.tid, v.target, withScripts); } });
     const dialog = el('div', { className: 'dialog', onkeydown: e => { if (e.key === 'Escape') close(); } }, el('div', { className: 'card', role: 'dialog', ariaModal: 'true' },
       el('h2', { textContent: T('policyImport.confirm.title', { n: todo.length }) }),
       el('p', { textContent: T('policyImport.confirm.tenant', { directory: directoryName() || '?', tid: tenant.tid }) }),
       ...(shown ? [el('p', { textContent: T('policyImport.confirm.prefix', { prefix: shown }) })] : []),
-      el('p', { textContent: T('policyImport.confirm.noAssign') }),
-      ...(scripts ? [el('p', { textContent: T('policyImport.confirm.scripts', { n: scripts }) })] : []),
+      ...(v.tagIds.length ? [el('p', { textContent: T('policyImport.confirm.tags', { tags: v.tagNames.join(', ') }) })] : []),
+      el('p', { textContent: v.target ? T('policyImport.confirm.assign', { target: v.describe, n: assigned }) : T('policyImport.confirm.noAssign') }),
+      ...(v.target && assigned < todo.length ? [el('p', { textContent: T('policyImport.confirm.notAssigned', { n: todo.length - assigned }) })] : []),
+      ...(scriptsAssigned ? [el('p', { textContent: T('policyImport.confirm.assignScripts', { n: scriptsAssigned }) })] : scripts ? [el('p', { textContent: T('policyImport.confirm.scripts', { n: scripts }) })] : []),
       el('div', { className: 'btns' }, cancel, ok)));
     ui.root.append(dialog);
     cancel.focus(); // safe default: Enter cancels
   }
 
-  async function run(todo, tid) {
+  // One creation, then its assignment when asked. The object stays when the assignment fails: the line⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ says so.
+  const createThenAssign = (tid, target, withScripts) => async e => {
+    const r = await graph.call('post', e.kind, { body: e.body, tid });
+    const plan = ok2xx(r) && r.id ? L.assignPlan(e.kind, target, withScripts) : null;
+    if (!plan) return r;
+    if (plan !== 'assign') return { ...r, assign: { status: plan } };
+    const a = await graph.call('assign', e.kind, { id: r.id, tid, body: A.newAssignment(e.kind, target) });
+    return { ...r, assign: ok2xx(a) ? { status: 'done' } : { status: 'failed', error: a.message || `Graph ${a.status}` } };
+  };
+
+  async function run(todo, tid, target, withScripts) {
     running = true;
     renderTenant();
     renderRows();
     if (panel) { ui.progress.classList.add('on'); ui.fill.style.width = '0'; }
     setStatus(T('policyImport.status.running', { done: 0, total: todo.length }));
-    const results = await L.runImport(todo, e => relay('post', e.kind, { body: e.body, tid }), {
+    const results = await L.runImport(todo, createThenAssign(tid, target, withScripts), {
       pause: sleep,
       onProgress: (i, res) => {
         todo[i].result = res;
@@ -323,9 +236,11 @@
     });
     running = false;
     const n = s => results.filter(r => r.status === s).length;
-    setStatus(T('policyImport.status.done', { created: n('created'), failed: n('failed'), unknown: n('unknown'), skipped: n('skipped') }));
+    const notAssigned = results.filter(r => r.assign && r.assign.status !== 'done').length;
+    setStatus(T('policyImport.status.done', { created: n('created'), failed: n('failed'), unknown: n('unknown'), skipped: n('skipped') }) + (notAssigned ? ` · ${T('policyImport.status.notAssigned', { n: notAssigned })}` : ''));
     renderTenant();
     renderRows();
+    setTimeout(() => ui.progress?.classList.remove('on'), 1500);
   }
 
   // One panel at a time,⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ see shared/drag.js. A running import goes on when the panel closes.
@@ -342,22 +257,35 @@
     } });
     ui.prefix = el('input', { type: 'text', value: prefix, maxLength: 100, spellcheck: false, autocomplete: 'off', placeholder: T('policyImport.ui.prefix'), title: T('policyImport.ui.prefix'),
       oninput: () => { prefix = ui.prefix.value; if (prepared.length) rebuild(); } });
+    const optionsChanged = () => {
+      ui.scriptsRow.hidden = !form.value().target;
+      if (prepared.length && !entries.some(e => e.result)) rebuild(); else renderRows();
+    };
+    form ||= window.__tenantCompassAssignForm({ call: graph.call, el, builtIn: false, filters: false, onChange: optionsChanged });
+    const v = form.value();
+    ui.scripts ||= el('input', { type: 'checkbox' });
+    ui.scriptsRow = el('label', { className: 'opt', hidden: !v.target }, ui.scripts, T('policyImport.ui.assignScripts'));
+    ui.options = el('fieldset', {}, form.root, ui.scriptsRow);
+    const options = el('details', { className: 'options', open: !!v.target || !!v.tagIds.length }, el('summary', { textContent: T('policyImport.ui.options') }), ui.options);
     ui.list = el('div', { className: 'list' });
     ui.fill = el('i');
     ui.progress = el('div', { className: 'progress' }, ui.fill);
     ui.status = el('div', { className: 'status', textContent: lastStatus });
     ui.go = el('button', { className: 'act', onclick: askConfirm });
     const head = el('div', { className: 'head', title: T('policyImport.ui.drag') }, T('policyImport.ui.title'), el('button', { className: 'x', textContent: '×', title: T('policyImport.ui.close'), onclick: toggle }));
-    panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.prefix), el('div', { className: 'bar' }, ui.all, ui.pick),
+    panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.prefix), options, el('div', { className: 'bar' }, ui.all, ui.pick),
       ui.list, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
     ui.root.append(panel);
     opened();
     if (window.__tenantCompassDrag) window.__tenantCompassDrag(panel, head, 'policy-import-panel');
     renderRows();
-    if (!running) routes.clear();
-    const look = () => discover().then(renderTenant);
+    if (!running) graph.reset();
+    const look = () => graph.discover().then(() => {
+      renderTenant();
+      if (graph.tenantNow() && !formLoaded) { formLoaded = true; form.load(); }
+    });
     look();
-    poll = setInterval(() => { if (!tenantNow()) look(); }, 2000); // the token shows up with the portal's next Graph call
+    poll = setInterval(() => { if (!graph.tenantNow()) look(); }, 2000); // the token shows up with the portal's next Graph call
   }
 
   function mount() {

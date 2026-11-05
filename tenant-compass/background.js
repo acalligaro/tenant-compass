@@ -83,14 +83,23 @@ const SCRIPTS = {
   policyImport: [{
     id: 'policy-import',
     matches: ['https://intune.microsoft.com/*', 'https://endpoint.microsoft.com/*', 'https://*.portal.azure.net/*'],
-    js: ['shared/drag.js', 'policy-import/lib.js', 'policy-import/page.js'],
+    js: ['shared/drag.js', 'shared/graph-bridge.js', 'shared/assign-lib.js', 'shared/assign-i18n.js', 'shared/assign-form.js', 'policy-import/lib.js', 'policy-import/page.js'],
+    allFrames: true,
+    runAt: 'document_start',
+    world: 'MAIN',
+  }],
+  // The list reuses As-Built's pure helpers and labels, and the token rules of Policy Import: each file runs once per frame.
+  bulkAssign: [{
+    id: 'bulk-assign',
+    matches: ['https://intune.microsoft.com/*', 'https://endpoint.microsoft.com/*', 'https://*.portal.azure.net/*'],
+    js: ['shared/drag.js', 'shared/graph-bridge.js', 'shared/assign-lib.js', 'shared/assign-i18n.js', 'shared/assign-form.js', 'as-built/i18n.js', 'as-built/lib.js', 'policy-import/lib.js', 'bulk-assign/lib.js', 'bulk-assign/page.js'],
     allFrames: true,
     runAt: 'document_start',
     world: 'MAIN',
   }],
 };
-// policyImport writes to the tenant: an explicit choice, the only feature off by default. portalLanguage, pim: popup-only, no content script.
-const DEFAULTS = { tenantGuard: true, asBuilt: true, settingInspector: true, settingsExplainer: true, oibRecommendations: true, assignmentLens: true, changeSnapshot: true, portalLanguage: true, pim: true, policyImport: false };
+// policyImport and bulkAssign write to the tenant: an explicit choice, the only features off by default. portalLanguage, pim: popup-only, no content script.
+const DEFAULTS = { tenantGuard: true, asBuilt: true, settingInspector: true, settingsExplainer: true, oibRecommendations: true, assignmentLens: true, changeSnapshot: true, portalLanguage: true, pim: true, policyImport: false, bulkAssign: false };
 
 // UI language of the in-page features: a marker script sets <html data-tenant-compass-lang>, read by shared/i18n-page.js
 // in every world. Each feature script also gets the shared helper and its own dictionary (<feature>/i18n.js).⁣​​‌​‌​​​​​​‌​​‌​‍​⁣

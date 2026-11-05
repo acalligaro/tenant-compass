@@ -193,6 +193,19 @@
     return { ...e, name, body: { ...e.body, [nameField(e.kind)]: name } };
   }
 
+  // Scope tags chosen in the panel replace those of the file. Returns a copy: the choice can still change.
+  function applyTags(e, tagIds) {
+    if (!tagIds?.length || !e.body) return e;
+    return { ...e, body: { ...e.body, roleScopeTagIds: tagIds }, warnings: e.warnings.filter(w => w !== 'policyImport.warn.crossTenant') };
+  }
+
+  // After a creation: assign, or why not. Scripts run on devices: only on request. Remediations need a schedule.
+  function assignPlan(kind, target, withScripts) {
+    if (!target) return null;
+    if (kind === 'rem') return 'remediation';
+    return kind === 'ps' || kind === 'sh' || kind === 'cattr' ? (withScripts ? 'assign' : 'script') : 'assign';
+  }
+
   // ---------- running the import ----------
 
   // Strictly sequential. Only 429 is retried:⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ after a 5xx or a network error the object may exist, so the line says "unknown".
@@ -211,7 +224,7 @@
           if (r.status !== 429 || tries === MAX_RETRIES) break;
           await pause(1000 * (r.retryAfter > 0 ? r.retryAfter : DEFAULT_WAIT_S));
         }
-        if (r.status >= 200 && r.status < 300) res = { ...line, status: 'created', id: r.id };
+        if (r.status >= 200 && r.status < 300) res = { ...line, status: 'created', id: r.id, assign: r.assign };
         else if (r.status === 401) { res = { ...line, status: 'failed', error: 'policyImport.err.expired' }; stopped = true; }
         else if (!r.status || r.status >= 500) res = { ...line, status: 'unknown', error: r.message };
         else res = { ...line, status: 'failed', error: r.message || `Graph ${r.status}` };
@@ -222,7 +235,7 @@
     return out;
   }
 
-  const api = { MAX_FILE_BYTES, parseFile, prepare, endpointFor, nameField, namesUrl, tokenInfo, jwtsIn, markDuplicates, applyPrefix, runImport };
+  const api = { MAX_FILE_BYTES, parseFile, prepare, endpointFor, nameField, namesUrl, tokenInfo, jwtsIn, markDuplicates, applyPrefix, applyTags, assignPlan, runImport };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.PolicyImportLib = api; // always: a stray `module` global must not hide the lib from the page
 })();

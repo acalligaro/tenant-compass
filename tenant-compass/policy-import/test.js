@@ -174,6 +174,19 @@ assert.strictEqual(L.applyPrefix(toPrefix, '   '), toPrefix);
 assert.strictEqual(L.applyPrefix(toPrefix, '  T ').name, 'T A'); // the separator typed by the user is kept
 const blockedEntry = { kind: 'sc', name: 'B', body: null, blockers: ['policyImport.block.secret'], warnings: [] };
 assert.strictEqual(L.applyPrefix(blockedEntry, 'X-'), blockedEntry);
+// Scope tags chosen in the panel replace those of the file: the warning about Default no longer applies
+const tagged = L.applyTags({ kind: 'sc', name: 'A', body: { name: 'A', roleScopeTagIds: ['0'] }, blockers: [], warnings: ['policyImport.warn.crossTenant', 'policyImport.warn.assignmentsIgnored'] }, ['5', '7']);
+assert.deepStrictEqual(tagged.body.roleScopeTagIds, ['5', '7']);
+assert.deepStrictEqual(tagged.warnings, ['policyImport.warn.assignmentsIgnored']);
+assert.strictEqual(L.applyTags(toPrefix, []), toPrefix);
+assert.strictEqual(L.applyTags(blockedEntry, ['5']), blockedEntry);
+// What happens after a creation: scripts only on request, remediations never (they need a schedule)
+const someTarget = { '@odata.type': G + 'groupAssignmentTarget', groupId: 'g' };
+assert.deepStrictEqual(['sc', 'dc', 'comp'].map(k => L.assignPlan(k, someTarget, false)), ['assign', 'assign', 'assign']);
+assert.deepStrictEqual(['ps', 'sh', 'cattr'].map(k => L.assignPlan(k, someTarget, false)), ['script', 'script', 'script']);
+assert.deepStrictEqual(['ps', 'sh', 'cattr'].map(k => L.assignPlan(k, someTarget, true)), ['assign', 'assign', 'assign']);
+assert.strictEqual(L.assignPlan('rem', someTarget, true), 'remediation');
+assert.strictEqual(L.assignPlan('sc', null, true), null);
 // Duplicates are checked on the name that will be created
 assert.strictEqual(L.markDuplicates([L.applyPrefix(ready('sc', 'Base'), 'T-')], { sc: ['Base'] }, KINDS)[0].duplicate, false);
 assert.strictEqual(L.markDuplicates([L.applyPrefix(ready('sc', 'Base'), 'T-')], { sc: ['t-base'] }, KINDS)[0].duplicate, true);
@@ -211,6 +224,9 @@ assert.strictEqual(L.markDuplicates([L.applyPrefix(ready('sc', 'Base'), 'T-')], 
   assert.strictEqual(r.out[0].error, 'policyImport.err.expired');
   r = await run(['a', 'b'], { a: [{ status: 403, message: 'role' }], b: [{ status: 201, id: '2' }] });
   assert.deepStrictEqual(r.out.map(x => x.status), ['failed', 'created']);
+  // What the post says about the assignment stays on the line
+  r = await run(['a'], { a: [{ status: 201, id: '1', assign: { status: 'failed', error: 'x' } }] });
+  assert.deepStrictEqual(r.out[0].assign, { status: 'failed', error: 'x' });
   // Last guard: an entry without a body is never sent
   const calls = [];
   const out = await L.runImport([{ kind: 'sc', name: 'x', body: null }], async e => { calls.push(e); return { status: 201 }; }, { pause: async () => {} });
