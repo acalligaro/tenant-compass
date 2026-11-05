@@ -2,7 +2,7 @@
 
 *A toolbox for the Microsoft Intune admin center.* · [Version française](README.md)
 
-Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, PIM shortcut and Policy Import in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
+Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, PIM shortcut, Policy Import and Bulk Assignment in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
 
 Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -28,6 +28,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 - [Set Tenant Language](#set-tenant-language)
 - [PIM shortcut](#pim-shortcut)
 - [Policy Import](#policy-import)
+- [Bulk Assignment](#bulk-assignment)
 - [Moving panels](#moving-panels)
 - [How it works](#how-it-works)
 - [Limitations](#limitations)
@@ -46,7 +47,8 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Change Snapshot | Local change log: before / after diff, author, ticket number, JSON / CSV export | Window at the bottom right after a save; log from the menu |
 | Set Tenant Language | Switches the console between two preset languages in one click | 🌐 buttons in the menu; Intune, Azure, Entra, Defender, Purview |
 | PIM shortcut | Opens PIM > My roles (eligible or active assignments) on the active tab's tenant in one click | 🔑 PIM eligible and 🔑 PIM active buttons in the menu |
-| Policy Import | Creates policies from As-Built JSON exports, without assignments. **Writes to the tenant: off by default** | Import button, right of As-Built (Intune) |
+| Policy Import | Creates policies from As-Built JSON exports, with optional group and scope tags. **Writes to the tenant: off by default** | Import button, right of As-Built (Intune) |
+| Bulk Assignment | Adds an assignment (group, all users, all devices), a filter and scope tags to several policies. **Writes to the tenant: off by default** | Bulk Assign button, right of Import (Intune) |
 
 ## Installation
 
@@ -62,7 +64,8 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Feature | Network traffic | Content |
 |---|---|---|
 | As-Built, Assignment Lens | Reads (`GET`) on `graph.microsoft.com`, with the portal session | The policies, apps and groups shown, as the portal itself does |
-| Policy Import, if you turn it on | Reads existing names (`GET`) and creates (`POST`) on `graph.microsoft.com`, with the portal session | The policies of the files you choose and confirm, without assignments |
+| Policy Import, if you turn it on | Reads existing names (`GET`) and creates (`POST`) on `graph.microsoft.com`, with the portal session | The policies of the files you choose and confirm, and if you ask their group and scope tags |
+| Bulk Assignment, if you turn it on | Reads (`GET`) policies, assignments, groups, filters and scope tags, then `POST …/assign` and `PATCH` (scope tags) on `graph.microsoft.com`, with the portal session | The policies you check, with their existing assignments |
 | Settings Explainer | Cookie-less reads of public `learn.microsoft.com/…/windows/client-management/mdm/` pages | No tenant data: only the name of the documentation page requested |
 | Tenant Guard, Setting Inspector, OpenIntuneBaseline, Change Snapshot, Set Tenant Language, PIM shortcut | None | They observe the page and the responses the portal already receives |
 
@@ -297,8 +300,10 @@ It creates Intune policies from As-Built JSON exports, without PowerShell, witho
 **Supported**: settings catalog, configuration profiles (including `.mobileconfig` and `.plist` custom profiles), compliance, PowerShell scripts, macOS shell scripts, macOS custom attributes, remediations. Other types in an export (apps, ADMX, enrollment, roles…) are flagged and ignored.
 
 - **Prefix** (optional): added to the name of each created object, with the separator you type (`TEST - My policy`). The preview shows the final name, and duplicates are checked on that name. Script file names and custom attribute names do not change.
-- **No assignment**: a created policy affects no device until you assign it.
-- **Creation only**: one `POST` per policy, to a closed list of collections. Nothing is updated or deleted. To undo, delete the object in the portal: its ID is shown on the row.
+- **Assignment**: without the option, a created policy affects no device. The **assignment group** option (search by name, or pasted ID) assigns each created object, as an inclusion and without a filter: it then applies to the devices of the group.
+- **Scripts and remediations**: scripts are assigned only if you check **Assign the scripts too**, because they run on devices. Remediations are never assigned: they need a schedule, to choose in the portal.
+- **Scope tags** (option): replace those of the file, at creation.
+- **Creation only**: one `POST` per policy to a closed list of collections, then one `POST …/assign` if you chose a group. Nothing existing is updated or deleted. To undo, delete the object in the portal: its ID is shown on the row. If the assignment fails, the object stays created and the row says so.
 - **Secrets**: a policy whose secret is missing from the export (masked or encrypted value, Wi-Fi key) is blocked, to be created in the portal.
 - **Certificates**: a profile linked to a certificate profile (SCEP, Enterprise Wi-Fi, VPN, wired network…) is blocked, because that link is not in the export. Optional links do not block and are lost: SSO extension PKINIT certificate, Windows `privacyAccessControls`.
 - **Other tenant**: scope tags go back to Default, and compliance keeps only the block action, with its grace period.
@@ -313,15 +318,39 @@ Graph validates each object on creation: a rare profile type may be refused, and
 
 - Code: `policy-import/lib.js` (tested: `node policy-import/test.js`), `policy-import/page.js`.
 
+## Bulk Assignment
+
+**Off by default: it changes existing policies, which then apply to devices.** Turn it on in ⚙, then reload the portal tab.
+
+Like As-Built, it lists your policies. Instead of exporting them, it adds an assignment and scope tags to them, in one go.
+
+1. Click **Bulk Assign**, then check the policies (search, filters by type and OS).
+2. Choose a target: an Entra ID group (search by name, or pasted ID), **All users** or **All devices**. As options: an assignment filter, included or excluded, and scope tags.
+3. Click **Apply (n)**, check the tenant, the target and the number of policies, then click **OK**.
+
+**Supported**: settings catalog, configuration profiles, compliance, administrative templates (ADMX), PowerShell scripts, macOS shell scripts, macOS custom attributes. Not remediations (a schedule to choose) or apps (an intent to choose).
+
+- **Adds only**: Graph replaces every assignment of an object on each call. The extension therefore reads the existing assignments and sends them back with the new one. If that read fails or is incomplete, nothing is sent. No assignment and no scope tag is removed.
+- **Already in place**: if the group is already assigned or excluded, or if the same target already exists, nothing is sent, even with another filter. An excluded group is never turned into an inclusion.
+- **Policy sets**: their assignments stay managed by the set and are not sent back.
+- **Filters**: Microsoft does not support them on PowerShell and shell scripts, and the extension treats custom attributes the same way. Such a row is skipped and says so, rather than being assigned without its filter, which would reach more devices than intended.
+- **Unknown result** (5xx error, network failure): check in the portal before running again. An expired session stops the series: the next rows are not sent.
+- **Permissions**: same write permissions as Policy Import. The Intune role must be active (PIM) and its scope tags must cover the policies.
+- **Log**: Change Snapshot logs each change, without one ticket card per object.
+
+> **Check the target before clicking OK.** An assignment to **All devices** applies to the whole fleet, and an assigned script runs on devices. OK stays a single click, including on a PROD tenant.
+
+- Code: `bulk-assign/lib.js` and `shared/assign-lib.js` (tested: `node bulk-assign/test.js`), `bulk-assign/page.js`, `shared/graph-bridge.js`, `shared/assign-form.js`.
+
 ## Moving panels
 
-As-Built, Assignment Lens and Policy Import do not open at the same time: opening one closes the others.
+As-Built, Assignment Lens, Policy Import and Bulk Assignment do not open at the same time: opening one closes the others.
 
 The As-Built and Assignment Lens buttons and panels can be moved with the mouse (button: drag; panel: drag the header). The position is stored per element in the portal's `localStorage` (`tenant-compass:pos:*` keys), shared code in `shared/drag.js`. The **Reset positions** button in the menu clears these keys in the active tab and reloads it.
 
 ## How it works
 
-`background.js` dynamically registers (`chrome.scripting.registerContentScripts`) the scripts of the checked features, based on the `chrome.storage.sync` key `features` (all on by default, except Policy Import). Each feature lives in its own folder (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), with a `lib.js` testable under Node and a `test.js`. The shared style (#0078d4 → #5b5fc7 gradient) and dragging (`shared/drag.js`) are common. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
+`background.js` dynamically registers (`chrome.scripting.registerContentScripts`) the scripts of the checked features, based on the `chrome.storage.sync` key `features` (all on by default, except Policy Import and Bulk Assignment). Each feature lives in its own folder (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), with a `lib.js` testable under Node and a `test.js`. The shared style (#0078d4 → #5b5fc7 gradient) and dragging (`shared/drag.js`) are common. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Limitations
 
@@ -343,6 +372,7 @@ cd ../assignment-lens && node test.js
 cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
 cd ../policy-import && node test.js
+cd ../bulk-assign && node test.js
 ```
 
 ## License

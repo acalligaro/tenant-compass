@@ -2,7 +2,7 @@
 
 *Boîte à outils pour le portail Microsoft Intune.* · [English version](README.en.md)
 
-Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, Raccourci PIM et Policy Import réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
+Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, Raccourci PIM, Policy Import et Bulk Assignment réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
 
 Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -28,6 +28,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 - [Set Tenant Language](#set-tenant-language)
 - [Raccourci PIM](#raccourci-pim)
 - [Policy Import](#policy-import)
+- [Bulk Assignment](#bulk-assignment)
 - [Déplacement](#déplacement)
 - [Fonctionnement](#fonctionnement)
 - [Limites](#limites)
@@ -46,7 +47,8 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Change Snapshot | Journal local des modifications : différence avant / après, auteur, n° de ticket, export JSON / CSV | Fenêtre en bas à droite après un enregistrement ; journal depuis le menu |
 | Set Tenant Language | Bascule la console entre deux langues prédéfinies, en 1 clic | Boutons 🌐 du menu ; Intune, Azure, Entra, Defender, Purview |
 | Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives) sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible et 🔑 PIM actif du menu |
-| Policy Import | Crée des stratégies à partir d'exports JSON As-Built, sans affectation. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, à droite d'As-Built (Intune) |
+| Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec groupe et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, à droite d'As-Built (Intune) |
+| Bulk Assignment | Ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. **Écrit dans le tenant : désactivée par défaut** | Bouton Bulk Assign, à droite d'Import (Intune) |
 
 ## Installation
 
@@ -62,7 +64,8 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Fonction | Échange réseau | Contenu |
 |---|---|---|
 | As-Built, Assignment Lens | Lectures (`GET`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies, applications et groupes affichés, comme le fait le portail |
-| Policy Import, si vous l'activez | Lecture des noms existants (`GET`) et création (`POST`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies des fichiers que vous choisissez et confirmez, sans affectation |
+| Policy Import, si vous l'activez | Lecture des noms existants (`GET`) et création (`POST`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies des fichiers que vous choisissez et confirmez, et si vous le demandez leur groupe et leurs scope tags |
+| Bulk Assignment, si vous l'activez | Lectures (`GET`) des stratégies, affectations, groupes, filtres et scope tags, puis `POST …/assign` et `PATCH` (scope tags) sur `graph.microsoft.com`, avec la session du portail | Les stratégies que vous cochez, avec leurs affectations existantes |
 | Settings Explainer | Lecture sans cookie de pages publiques `learn.microsoft.com/…/windows/client-management/mdm/` | Aucune donnée du tenant : seulement le nom de la page de documentation demandée |
 | Tenant Guard, Setting Inspector, OpenIntuneBaseline, Change Snapshot, Set Tenant Language, Raccourci PIM | Aucun | Ils observent la page et les réponses que le portail reçoit déjà |
 
@@ -299,8 +302,10 @@ Elle crée des stratégies Intune à partir des exports JSON d'As-Built, sans Po
 **Pris en charge** : catalogue de paramètres, profils de configuration (dont les profils personnalisés `.mobileconfig` et `.plist`), conformité, scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, remédiations. Les autres types d'un export (applications, ADMX, inscription, rôles…) sont signalés et ignorés.
 
 - **Préfixe** (optionnel) : ajouté au nom de chaque objet créé, avec le séparateur que vous tapez (`TEST - Ma stratégie`). L'aperçu montre le nom final, et les doublons sont vérifiés sur ce nom. Les noms de fichier des scripts et les noms de custom attribute ne changent pas.
-- **Aucune affectation** : une stratégie créée n'a d'effet sur aucun appareil tant que vous ne l'affectez pas.
-- **Création seulement** : un `POST` par stratégie, vers une liste fermée de collections. Rien n'est modifié ni supprimé. Pour annuler, supprimez l'objet dans le portail : son ID s'affiche sur la ligne.
+- **Affectation** : sans option, une stratégie créée n'a d'effet sur aucun appareil. L'option **groupe d'affectation** (recherche par nom, ou ID collé) affecte chaque objet créé, en inclusion et sans filtre : il s'applique alors aux appareils du groupe.
+- **Scripts et remédiations** : les scripts ne sont affectés que si vous cochez **Affecter aussi les scripts**, car ils s'exécutent sur les appareils. Les remédiations ne sont jamais affectées : elles demandent un planning, à choisir dans le portail.
+- **Scope tags** (option) : remplacent ceux du fichier, à la création.
+- **Création seulement** : un `POST` par stratégie vers une liste fermée de collections, puis un `POST …/assign` si vous avez choisi un groupe. Rien d'existant n'est modifié ni supprimé. Pour annuler, supprimez l'objet dans le portail : son ID s'affiche sur la ligne. Si l'affectation échoue, l'objet reste créé et la ligne l'indique.
 - **Secrets** : une stratégie dont un secret est absent de l'export (valeur masquée ou chiffrée, clé Wi-Fi) est bloquée, à créer dans le portail.
 - **Certificats** : un profil lié à un profil de certificat (SCEP, Wi-Fi Enterprise, VPN, réseau filaire…) est bloqué, car ce lien n'est pas dans l'export. Les liens facultatifs ne bloquent pas et sont perdus : certificat PKINIT de l'extension SSO, `privacyAccessControls` Windows.
 - **Autre tenant** : les balises d'étendue reviennent à Default, et la conformité ne garde que l'action de blocage, avec son délai de grâce.
@@ -315,15 +320,39 @@ Graph valide chaque objet à la création : un type de profil rare peut être re
 
 - Code : `policy-import/lib.js` (testé : `node policy-import/test.js`), `policy-import/page.js`.
 
+## Bulk Assignment
+
+**Désactivée par défaut : elle modifie des stratégies existantes, qui s'appliquent ensuite aux appareils.** Activez-la dans ⚙, puis rechargez l'onglet du portail.
+
+Comme As-Built, elle liste vos stratégies. Au lieu de les exporter, elle leur ajoute une affectation et des scope tags, en une seule fois.
+
+1. Cliquer sur **Bulk Assign**, puis cocher les stratégies (recherche, filtres par type et par OS).
+2. Choisir une cible : un groupe Entra ID (recherche par nom, ou ID collé), **Tous les utilisateurs** ou **Tous les appareils**. En option : un filtre d'affectation, en inclusion ou en exclusion, et des scope tags.
+3. Cliquer sur **Appliquer (n)**, vérifier le tenant, la cible et le nombre de stratégies, puis cliquer sur **OK**.
+
+**Pris en charge** : catalogue de paramètres, profils de configuration, conformité, modèles d'administration (ADMX), scripts PowerShell, scripts shell macOS, attributs personnalisés macOS. Pas les remédiations (planning à choisir) ni les applications (intention à choisir).
+
+- **Ajout seulement** : Graph remplace toutes les affectations d'un objet à chaque envoi. L'extension relit donc les affectations existantes et les renvoie avec la nouvelle. Si cette lecture échoue ou est incomplète, rien n'est envoyé. Aucune affectation ni aucun scope tag n'est retiré.
+- **Déjà en place** : si le groupe est déjà affecté ou exclu, ou si la même cible existe déjà, rien n'est envoyé, même avec un autre filtre. Un groupe exclu n'est jamais transformé en inclusion.
+- **Ensembles de stratégies** : leurs affectations restent gérées par l'ensemble et ne sont pas renvoyées.
+- **Filtres** : Microsoft ne les prend pas en charge sur les scripts PowerShell et shell, et l'extension traite les attributs personnalisés de la même façon. Une telle ligne est ignorée et le signale, plutôt que d'être affectée sans filtre, ce qui toucherait plus d'appareils que prévu.
+- **Résultat inconnu** (erreur 5xx, coupure réseau) : vérifiez dans le portail avant de relancer. Une session expirée arrête la série : les lignes suivantes ne sont pas envoyées.
+- **Droits** : mêmes droits d'écriture que Policy Import. Le rôle Intune doit être actif (PIM) et ses balises d'étendue doivent couvrir les stratégies.
+- **Journal** : Change Snapshot journalise chaque modification, sans carte de ticket par objet.
+
+> **Vérifiez la cible avant de cliquer sur OK.** Une affectation à **Tous les appareils** s'applique à tout le parc, et un script affecté s'exécute sur les appareils. OK reste un seul clic, y compris sur un tenant PROD.
+
+- Code : `bulk-assign/lib.js` et `shared/assign-lib.js` (testés : `node bulk-assign/test.js`), `bulk-assign/page.js`, `shared/graph-bridge.js`, `shared/assign-form.js`.
+
 ## Déplacement
 
-As-Built, Assignment Lens et Policy Import ne s'ouvrent pas en même temps : ouvrir l'un referme les autres.
+As-Built, Assignment Lens, Policy Import et Bulk Assignment ne s'ouvrent pas en même temps : ouvrir l'un referme les autres.
 
 Les boutons et panneaux d'As-Built et d'Assignment Lens se déplacent à la souris (bouton : glisser ; panneau : glisser l'en-tête). Position mémorisée par élément dans le `localStorage` du portail (clés `tenant-compass:pos:*`), code commun dans `shared/drag.js`. Bouton **Positions par défaut** dans le menu : efface ces clés dans l'onglet actif et le recharge.
 
 ## Fonctionnement
 
-`background.js` enregistre dynamiquement (`chrome.scripting.registerContentScripts`) les scripts des fonctions cochées, d'après `chrome.storage.sync` clé `features` (toutes actives par défaut, sauf Policy Import). Chaque fonction vit dans son dossier (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), avec un `lib.js` testable sous Node et un `test.js`. Le style commun (dégradé #0078d4 → #5b5fc7) et le déplacement (`shared/drag.js`) sont partagés. Détails : [ARCHITECTURE.md](ARCHITECTURE.md).
+`background.js` enregistre dynamiquement (`chrome.scripting.registerContentScripts`) les scripts des fonctions cochées, d'après `chrome.storage.sync` clé `features` (toutes actives par défaut, sauf Policy Import et Bulk Assignment). Chaque fonction vit dans son dossier (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), avec un `lib.js` testable sous Node et un `test.js`. Le style commun (dégradé #0078d4 → #5b5fc7) et le déplacement (`shared/drag.js`) sont partagés. Détails : [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Limites
 
@@ -345,6 +374,7 @@ cd ../assignment-lens && node test.js
 cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
 cd ../policy-import && node test.js
+cd ../bulk-assign && node test.js
 ```
 
 ## Licence
