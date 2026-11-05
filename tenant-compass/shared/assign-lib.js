@@ -16,11 +16,12 @@
     ['ps', { path: 'deviceManagementScripts', key: 'deviceManagementScriptAssignments', filter: false, typed: false }],
     ['sh', { path: 'deviceShellScripts', key: 'deviceManagementScriptAssignments', filter: false, typed: false }],
     ['cattr', { path: 'deviceCustomAttributeShellScripts', key: 'deviceManagementScriptAssignments', filter: false, typed: false }],
+    ['app', { root: ROOT + 'deviceAppManagement/', path: 'mobileApps', key: 'mobileAppAssignments', filter: true, typed: true }],
   ]);
 
   const assignable = kind => KINDS.has(kind);
   const supportsFilter = kind => !!KINDS.get(kind)?.filter;
-  const policyUrl = (kind, id) => (KINDS.has(kind) ? `${GRAPH}${KINDS.get(kind).path}/${encodeURIComponent(id)}` : null);
+  const policyUrl = (kind, id) => (KINDS.has(kind) ? `${KINDS.get(kind).root || GRAPH}${KINDS.get(kind).path}/${encodeURIComponent(id)}` : null);
   const assignUrl = (kind, id) => (KINDS.has(kind) ? `${policyUrl(kind, id)}/assign` : null);
   // $expand everywhere but the catalog: /assignments⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ answers 400 on shell scripts (seen on a real tenant, 2026-11-05).
   const existingUrl = (kind, id) => (KINDS.has(kind) ? policyUrl(kind, id) + (KINDS.get(kind).sub ? '/assignments' : '?$expand=assignments') : null);
@@ -52,12 +53,16 @@
   const targetKey = t => t?.groupId || String(t?.['@odata.type'] || '').replace(/allLicensedUsers|allUsers/, 'allUsers');
 
   // Body of /assign for existing + target. Assignments from a policy set stay out: sending them would make them direct.
-  function mergeTargets(kind, existing, target) {
+  // An app assignment also carries its deployment type and settings: they go back as they are. extra: those of the new one.
+  function mergeTargets(kind, existing, target, extra = {}) {
     const direct = existing.filter(a => !a?.source || a.source === 'direct');
     if (existing.some(a => targetKey(a?.target) === targetKey(target))) return { already: true, body: null };
     if (isBuiltIn(target) && existing.some(a => isGroup(a?.target))) return { already: false, conflict: 'groupPresent', body: null };
     if (isGroup(target) && existing.some(a => isBuiltIn(a?.target))) return { already: false, conflict: 'builtInPresent', body: null };
-    return { already: false, body: { [KINDS.get(kind).key]: [...direct.map(a => ({ target: a.target })), { target }] } };
+    const item = kind === 'app'
+      ? (t, a) => ({ '@odata.type': G + 'mobileAppAssignment', intent: a.intent, settings: a.settings ?? null, target: t })
+      : t => ({ target: t });
+    return { already: false, body: { [KINDS.get(kind).key]: [...direct.map(a => item(a.target, a)), item(target, extra)] } };
   }
 
   // A group and a built-in target never go together. An excluded group does not count: "All devices except this group" is a usual setup.
@@ -89,6 +94,33 @@
     return list.map(g => ({ id: g.id, name: g.displayName }));
   }
 
+  // ---------- applications ----------
+
+  // Settings of a new assignment. Managed Google Play has its own, with the default update mode. Others: Graph's default.
+  function appSettings(type) {
+    return /^#microsoft\.graph\.androidManagedStore(Web)?App$/.test(type || '')
+      ? { '@odata.type': G + 'androidManagedStoreAppAssignmentSettings', androidManagedStoreAppTrackIds: [], autoUpdateMode: 'default' }
+      : null;
+  }
+
+  // Deployment types an app takes: without enrollment on Android and iOS only, Required or Uninstall on an Android Enterprise system app.
+  function appIntents(type, isSystemApp) {
+    if (isSystemApp) return ['required', 'uninstall'];
+    return /^#microsoft\.graph\.(android|managedAndroid|ios|managedIOS)/i.test(type || '')
+      ? ['required', 'available', 'availableWithoutEnrollment', 'uninstall']
+      : ['required', 'available', 'uninstall'];
+  }
+
+  // Why this deployment type cannot go on this app and target, null when it can. Learn: Available is for user groups,
+  // except Win32 and Android fully managed or corporate-owned. Graph has the last word on the type of a group.
+  function appRefusal(policy, intent, target) {
+    const type = policy?.['@odata.type'];
+    if (!appIntents(type, policy?.isSystemApp).includes(intent)) return 'bulkAssign.err.noIntent';
+    if (target?.['@odata.type'] !== G + 'allDevicesAssignmentTarget') return null;
+    if (intent === 'availableWithoutEnrollment') return 'bulkAssign.err.intentDevices';
+    return intent === 'available' && !/^#microsoft\.graph\.(win32|android|managedAndroid)/i.test(type || '') ? 'bulkAssign.err.intentDevices' : null;
+  }
+
   // ---------- retry rules of the writing features ----------
 
   const ok = r => r.status >= 200 && r.status < 300;
@@ -111,7 +143,7 @@
   // After a write left: 5xx or a network failure may hide a success.
   const writeResult = r => (ok(r) ? { status: 'done' } : !r.status || r.status >= 500 ? { status: 'unknown' } : refused(r));
 
-  const api = { withRetry, refused, writeResult, KINDS: [...KINDS.keys()], TAGS_URL: `${GRAPH}roleScopeTags`, FILTERS_URL: `${GRAPH}assignmentFilters`,
+  const api = { appSettings, appIntents, appRefusal, withRetry, refused, writeResult, KINDS: [...KINDS.keys()], TAGS_URL: `${GRAPH}roleScopeTags`, FILTERS_URL: `${GRAPH}assignmentFilters`,
     assignable, supportsFilter, policyUrl, assignUrl, existingUrl, targetOf, hasFilter, assignmentsIn, mergeTargets, newAssignment, tagsPatch, groupsUrl, groupsIn };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.TenantCompassAssign = api; // always: a stray `module` global must not hide the lib from the page

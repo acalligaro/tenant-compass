@@ -333,10 +333,11 @@ Comme As-Built, elle liste vos stratégies. Au lieu de les exporter, elle leur a
 2. Choisir une cible : un groupe Entra ID (recherche par nom, ou ID collé), **Tous les utilisateurs** ou **Tous les appareils**. En option : un filtre d'affectation, en inclusion ou en exclusion, et des scope tags.
 3. Cliquer sur **Appliquer (n)**, vérifier le tenant, la cible et le nombre de stratégies, puis cliquer sur **OK**.
 
-**Pris en charge** : catalogue de paramètres, profils de configuration, conformité, modèles d'administration (ADMX), scripts PowerShell, scripts shell macOS, attributs personnalisés macOS. Pas les remédiations (planning à choisir) ni les applications (intention à choisir).
+**Pris en charge** : catalogue de paramètres, profils de configuration, conformité, modèles d'administration (ADMX), scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, applications. Pas les remédiations (planning à choisir).
 
 - **Ajout seulement** : Graph remplace toutes les affectations d'un objet à chaque envoi. L'extension relit donc les affectations existantes et les renvoie avec la nouvelle. Si cette lecture échoue ou est incomplète, rien n'est envoyé. Aucune affectation ni aucun scope tag n'est retiré.
 - **Déjà en place** : si le groupe est déjà affecté ou exclu, ou si la même cible existe déjà, rien n'est envoyé, même avec un autre filtre. Un groupe exclu n'est jamais transformé en inclusion.
+- **Applications** : dès qu'une application est cochée, choisissez son type de déploiement : **Requis**, **Disponible pour les appareils inscrits**, **Disponible avec ou sans inscription** (Android et iOS) ou **Désinstaller**. Il n'y a pas de valeur par défaut. Une application système Android Enterprise n'accepte que Requis ou Désinstaller. Les affectations existantes gardent leur type et leurs réglages, et un groupe ne prend qu'un seul type. Une application Managed Google Play reçoit la mise à jour automatique par défaut.
 - **Groupe ou cible intégrée, pas les deux** : si un groupe est déjà affecté, **Tous les utilisateurs** et **Tous les appareils** sont refusés, et inversement. Rien n'est envoyé et la ligne l'indique. Un groupe exclu ne bloque pas : « tous les appareils sauf ce groupe » reste possible.
 - **Ensembles de stratégies** : leurs affectations restent gérées par l'ensemble et ne sont pas renvoyées.
 - **Filtres** : Microsoft ne les prend pas en charge sur les scripts PowerShell et shell, et l'extension traite les attributs personnalisés de la même façon. Une telle ligne est ignorée et le signale, plutôt que d'être affectée sans filtre, ce qui toucherait plus d'appareils que prévu.
@@ -344,7 +345,7 @@ Comme As-Built, elle liste vos stratégies. Au lieu de les exporter, elle leur a
 - **Droits** : mêmes droits d'écriture que Policy Import. Le rôle Intune doit être actif (PIM) et ses balises d'étendue doivent couvrir les stratégies.
 - **Journal** : Change Snapshot journalise chaque modification, sans carte de ticket par objet.
 
-> **Vérifiez la cible avant de cliquer sur OK.** Une affectation à **Tous les appareils** s'applique à tout le parc, et un script affecté s'exécute sur les appareils. OK reste un seul clic, y compris sur un tenant PROD.
+> **Vérifiez la cible avant de cliquer sur OK.** Une affectation à **Tous les appareils** s'applique à tout le parc, un script affecté s'exécute sur les appareils, et une application en **Requis** ou **Désinstaller** s'installe ou se retire sans action de l'utilisateur. OK reste un seul clic, y compris sur un tenant PROD.
 
 - Code : `bulk-assign/lib.js` et `shared/assign-lib.js` (testés : `node bulk-assign/test.js`), `bulk-assign/page.js`, `shared/graph-bridge.js`, `shared/assign-form.js`.
 

@@ -9,8 +9,8 @@
 
   // ADMX and lookups use the same write scope as profiles: tokenInfo⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ knows only the types Policy Import creates.
   const info = t => {
-    const i = P.tokenInfo(t);
-    return { tid: i.tid, kinds: i.kinds.length ? [...i.kinds.filter(A.assignable), ...(i.kinds.includes('dc') ? ['admx'] : []), 'meta'] : [] };
+    const i = P.tokenInfo(t), mobile = P.tokenScopes(t).scopes.includes('DeviceManagementApps.ReadWrite.All');
+    return { tid: i.tid, kinds: i.kinds.length || mobile ? [...i.kinds.filter(A.assignable), ...(i.kinds.includes('dc') ? ['admx'] : []), ...(mobile ? ['app'] : []), 'meta'] : [] };
   };
   const graph = bridge({ channel: 'bulkAssign', info, jwtsIn: P.jwtsIn, ops: { ...bridge.assignOps(A), list: (token, kind) => bridge.readAll(B.listUrl(kind), token) } });
   if (!graph) return;
@@ -18,6 +18,7 @@
   const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const SCRIPTS = new Set(['ps', 'sh', 'cattr']);
+  const INTENTS = { required: 'bulkAssign.intent.required', available: 'bulkAssign.intent.available', availableWithoutEnrollment: 'bulkAssign.intent.availableWithoutEnrollment', uninstall: 'bulkAssign.intent.uninstall' };
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(`
     :host { all: initial; color-scheme: light; }
@@ -29,6 +30,7 @@
     .head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; color: #fff; font-size: 15px; font-weight: 600;
             background: linear-gradient(135deg, #0078d4, #5b5fc7); }
     .bar { display: flex; gap: 8px; padding: 10px 16px 0; align-items: center; color: #484644; font-size: 12px; overflow-wrap: anywhere; }
+    .bar[hidden] { display: none; }
     .bar input[type=search], .bar select { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #e1dfdd; border-radius: 10px; background: #faf9f8; color: #323130; outline: none; }
     .list { overflow: auto; flex: 1; padding: 6px 10px; min-height: 120px; }
     label.row { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 10px; cursor: pointer; }
@@ -91,7 +93,12 @@
     if (!panel) return;
     const n = selected().length, v = form.value();
     ui.go.textContent = T('bulkAssign.ui.go', { n });
-    ui.go.disabled = running || !n || !v.complete || (!v.target && !v.tagIds.length);
+    // Deployment type of the apps checked: only the types one of them takes, no default. A wrong choice would install or remove software.
+    const apps = selected().filter(i => i.kind === 'app'), allowed = new Set(apps.flatMap(i => A.appIntents(i.odata)));
+    ui.intentRow.hidden = !v.target || !apps.length;
+    for (const o of ui.intent.options) o.disabled = !!o.value && !allowed.has(o.value);
+    if (ui.intent.selectedOptions[0]?.disabled) ui.intent.value = '';
+    ui.go.disabled = running || !n || !v.complete || (!v.target && !v.tagIds.length) || (!!v.target && !!apps.length && !ui.intent.value);
     const shown = visible();
     ui.all.disabled = running || !shown.length;
     ui.all.checked = !!shown.length && shown.every(i => checked.has(i.key));
@@ -103,7 +110,7 @@
     const lists = await Promise.all(B.KINDS.filter(k => tenant.kinds.includes(k)).map(async kind => {
       const r = await graph.call('list', kind);
       if (r.status < 200 || r.status >= 300) { errors.push(T('asBuilt.src.' + kind)); return []; }
-      return r.body.value.map(raw => ({ ...S.policySummary(kind, raw), key: kind + ':' + raw.id }));
+      return r.body.value.map(raw => ({ ...S.policySummary(kind, raw), key: kind + ':' + raw.id, odata: raw['@odata.type'] }));
     }));
     items = lists.flat().sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
     const oses = [...new Set(items.flatMap(S.platformsOf))].sort((a, b) => a.localeCompare(b, 'fr'));
@@ -116,10 +123,10 @@
   function askConfirm() {
     const todo = selected(), tenant = graph.tenantNow(), v = form.value();
     if (!todo.length || !tenant) return;
-    const scripts = v.target ? todo.filter(i => SCRIPTS.has(i.kind)).length : 0;
+    const scripts = v.target ? todo.filter(i => SCRIPTS.has(i.kind)).length : 0, apps = v.target ? todo.filter(i => i.kind === 'app').length : 0, intent = ui.intent.value;
     const close = () => dialog.remove();
     const cancel = el('button', { className: 'act ghost', textContent: T('bulkAssign.confirm.cancel'), onclick: close });
-    const ok = el('button', { className: 'act', textContent: T('bulkAssign.confirm.ok'), onclick: () => { close(); run(todo, { target: v.target, tagIds: v.tagIds, tid: tenant.tid }); } });
+    const ok = el('button', { className: 'act', textContent: T('bulkAssign.confirm.ok'), onclick: () => { close(); run(todo, { target: v.target, intent, tagIds: v.tagIds, tid: tenant.tid }); } });
     const dialog = el('div', { className: 'dialog', onkeydown: e => { if (e.key === 'Escape') close(); } }, el('div', { className: 'card', role: 'dialog', ariaModal: 'true' },
       el('h2', { textContent: T('bulkAssign.confirm.title', { n: todo.length }) }),
       el('p', { textContent: T('bulkAssign.confirm.tenant', { directory: directoryName() || '?', tid: tenant.tid }) }),
@@ -127,6 +134,7 @@
       ...(v.tagIds.length ? [el('p', { textContent: T('bulkAssign.confirm.tags', { tags: v.tagNames.join(', ') }) })] : []),
       el('p', { textContent: T('bulkAssign.confirm.effect') }),
       ...(scripts ? [el('p', { textContent: T('bulkAssign.confirm.scripts', { n: scripts }) })] : []),
+      ...(apps ? [el('p', { textContent: T('bulkAssign.confirm.apps', { n: apps, intent: T(INTENTS[intent]) }) })] : []),
       el('div', { className: 'btns' }, cancel, ok)));
     ui.root.append(dialog);
     cancel.focus(); // safe default: Enter cancels
@@ -169,6 +177,9 @@
     ui.type = el('select', { onchange: renderList }, el('option', { value: '', textContent: T('bulkAssign.ui.allTypes') }), ...B.KINDS.map(k => el('option', { value: k, textContent: T('asBuilt.src.' + k) })));
     ui.os = el('select', { onchange: renderList }, el('option', { value: '', textContent: T('bulkAssign.ui.allOs') }));
     ui.list = el('div', { className: 'list' });
+    ui.intent = el('select', { onchange: renderGo, title: T('bulkAssign.ui.intent') }, el('option', { value: '', textContent: T('bulkAssign.ui.intentPick') }),
+      ...Object.entries(INTENTS).map(([value, key]) => el('option', { value, textContent: T(key) })));
+    ui.intentRow = el('div', { className: 'bar', hidden: true }, el('span', { textContent: T('bulkAssign.ui.intent') }), ui.intent);
     form = window.__tenantCompassAssignForm({ call: graph.call, el, builtIn: true, filters: true, onChange: renderGo });
     ui.fill = el('i');
     ui.progress = el('div', { className: 'progress' }, ui.fill);
@@ -176,7 +187,7 @@
     ui.go = el('button', { className: 'act', disabled: true, textContent: T('bulkAssign.ui.go', { n: 0 }), onclick: askConfirm });
     const head = el('div', { className: 'head', title: T('bulkAssign.ui.drag') }, T('bulkAssign.ui.title'), el('button', { className: 'x', textContent: '×', title: T('bulkAssign.ui.close'), onclick: toggle }));
     panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.all, ui.search),
-      el('div', { className: 'bar' }, ui.type, ui.os), ui.list, form.root, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
+      el('div', { className: 'bar' }, ui.type, ui.os), ui.list, form.root, ui.intentRow, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
     ui.root.append(panel);
     opened();
     if (window.__tenantCompassDrag) window.__tenantCompassDrag(panel, head, 'bulk-assign-panel');

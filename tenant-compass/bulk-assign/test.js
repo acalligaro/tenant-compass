@@ -9,15 +9,20 @@ const BASE = 'https://graph.microsoft.com/beta/deviceManagement/';
 
 // ---------- closed tables ----------
 
-for (const k of ['sc', 'dc', 'comp', 'admx', 'ps', 'sh', 'cattr']) assert.ok(A.assignable(k), k);
-for (const k of ['rem', 'app', '__proto__', 'constructor', '', null, undefined]) assert.ok(!A.assignable(k), String(k)); // remediations need a schedule
+for (const k of ['sc', 'dc', 'comp', 'admx', 'ps', 'sh', 'cattr', 'app']) assert.ok(A.assignable(k), k);
+for (const k of ['rem', 'ca', '__proto__', 'constructor', '', null, undefined]) assert.ok(!A.assignable(k), String(k)); // remediations need a schedule
 assert.deepStrictEqual(['sc', 'dc', 'comp', 'admx', 'ps', 'sh', 'cattr'].map(A.supportsFilter), [true, true, true, true, false, false, false]); // Learn: filters ref-supported-workloads
 
 assert.strictEqual(A.assignUrl('dc', 'a b'), BASE + 'deviceConfigurations/a%20b/assign');
 assert.strictEqual(A.assignUrl('sh', 'x'), BASE + 'deviceShellScripts/x/assign');
 assert.strictEqual(A.assignUrl('rem', 'x'), null);
 assert.strictEqual(A.policyUrl('comp', 'x'), BASE + 'deviceCompliancePolicies/x');
-assert.strictEqual(A.policyUrl('app', 'x'), null);
+assert.strictEqual(A.policyUrl('ca', 'x'), null);
+const APPS = 'https://graph.microsoft.com/beta/deviceAppManagement/';
+assert.strictEqual(A.policyUrl('app', 'x'), APPS + 'mobileApps/x');
+assert.strictEqual(A.assignUrl('app', 'x'), APPS + 'mobileApps/x/assign');
+assert.strictEqual(A.existingUrl('app', 'x'), APPS + 'mobileApps/x?$expand=assignments');
+assert.ok(A.supportsFilter('app'));
 // The route that answers⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ 400 on shell scripts stays out: $expand everywhere except the catalog
 assert.strictEqual(A.existingUrl('sc', 'x'), BASE + 'configurationPolicies/x/assignments');
 for (const k of ['dc', 'comp', 'admx', 'ps', 'sh', 'cattr']) assert.ok(A.existingUrl(k, 'x').endsWith('/x?$expand=assignments'), k);
@@ -72,6 +77,36 @@ assert.deepStrictEqual([withExclusion.already, withExclusion.conflict, withExclu
 // The two built-in targets can go together, and the same target stays "already there"
 assert.strictEqual(A.mergeTargets('dc', [{ target: allUsers }], allDevices).conflict, undefined);
 assert.deepStrictEqual(A.mergeTargets('dc', [{ target: groupOf('g2') }, { target: allDevices }], allDevices), { already: true, body: null });
+// ---------- applications: each assignment carries its deployment type and its settings ----------
+
+const appAssign = G + 'mobileAppAssignment';
+const playSettings = { '@odata.type': G + 'androidManagedStoreAppAssignmentSettings', androidManagedStoreAppTrackIds: [], autoUpdateMode: 'default' };
+assert.deepStrictEqual(A.appSettings(G + 'androidManagedStoreApp'), playSettings);
+assert.deepStrictEqual(A.appSettings(G + 'androidManagedStoreWebApp'), playSettings);
+for (const t of ['androidStoreApp', 'androidLobApp', 'macOSPkgApp', 'win32LobApp']) assert.strictEqual(A.appSettings(G + t), null, t);
+// What exists is sent back with its deployment type and settings, a policy set's stays out
+const oldApp = { id: 'a', source: 'direct', sourceId: 'x', intent: 'required', settings: playSettings, target: groupOf('g2') };
+const appMerged = A.mergeTargets('app', [oldApp, { source: 'policySets', intent: 'required', target: groupOf('g3') }], groupOf('g1'), { intent: 'available', settings: playSettings });
+assert.deepStrictEqual(appMerged.body, { mobileAppAssignments: [
+  { '@odata.type': appAssign, intent: 'required', settings: playSettings, target: groupOf('g2') },
+  { '@odata.type': appAssign, intent: 'available', settings: playSettings, target: groupOf('g1') }] });
+assert.strictEqual(A.mergeTargets('app', [oldApp], groupOf('g2'), { intent: 'uninstall' }).already, true); // Learn: a group takes a single deployment type
+assert.strictEqual(A.mergeTargets('app', [oldApp], A.targetOf({ mode: 'allUsers' }), { intent: 'required' }).conflict, 'groupPresent');
+// Deployment types per app
+assert.deepStrictEqual(A.appIntents(G + 'androidManagedStoreApp'), ['required', 'available', 'availableWithoutEnrollment', 'uninstall']);
+assert.deepStrictEqual(A.appIntents(G + 'iosStoreApp'), ['required', 'available', 'availableWithoutEnrollment', 'uninstall']);
+assert.deepStrictEqual(A.appIntents(G + 'macOSPkgApp'), ['required', 'available', 'uninstall']);
+assert.deepStrictEqual(A.appIntents(G + 'androidManagedStoreApp', true), ['required', 'uninstall']); // Android Enterprise system app
+const allDev = A.targetOf({ mode: 'allDevices' });
+assert.strictEqual(A.appRefusal({ '@odata.type': G + 'androidManagedStoreApp', isSystemApp: true }, 'available', groupOf('g')), 'bulkAssign.err.noIntent');
+assert.strictEqual(A.appRefusal({ '@odata.type': G + 'androidManagedStoreApp', isSystemApp: true }, 'required', groupOf('g')), null);
+assert.strictEqual(A.appRefusal({ '@odata.type': G + 'macOSPkgApp' }, 'availableWithoutEnrollment', groupOf('g')), 'bulkAssign.err.noIntent');
+// Learn: Available is for user groups, except Win32 and Android fully managed or corporate-owned
+assert.strictEqual(A.appRefusal({ '@odata.type': G + 'macOSPkgApp' }, 'available', allDev), 'bulkAssign.err.intentDevices');
+assert.strictEqual(A.appRefusal({ '@odata.type': G + 'win32LobApp' }, 'available', allDev), null);
+assert.strictEqual(A.appRefusal({ '@odata.type': G + 'androidManagedStoreApp' }, 'available', allDev), null);
+assert.strictEqual(A.appRefusal({ '@odata.type': G + 'androidManagedStoreApp' }, 'availableWithoutEnrollment', allDev), 'bulkAssign.err.intentDevices');
+assert.strictEqual(A.appRefusal({ '@odata.type': G + 'macOSPkgApp' }, 'required', allDev), null);
 // Policy set assignments belong to the policy set: sending them back would turn them into direct ones
 assert.deepStrictEqual(A.mergeTargets('dc', [{ source: 'policySets', sourceId: 's', target: groupOf('g3') }], groupOf('g1')).body.assignments, [{ target: groupOf('g1') }]);
 assert.deepStrictEqual(A.newAssignment('sh', groupOf('g1')), { deviceManagementScriptAssignments: [{ target: groupOf('g1') }] });
@@ -142,6 +177,25 @@ assert.deepStrictEqual(A.groupsIn(null), []);
   assert.deepStrictEqual([r.assign.status, r.assign.error], ['skipped', 'bulkAssign.err.builtInPresent']);
   assert.ok(!f.calls.some(c => c.op === 'assign'));
 
+  // Applications: read first, deployment type checked on what was read, existing kept
+  const app = { kind: 'app', id: 'a1' };
+  f = fake({ existing: { status: 200, body: { '@odata.type': G + 'androidManagedStoreApp', assignments: [{ intent: 'required', settings: null, target: groupOf('g2') }] } }, assign: { status: 204 } });
+  r = await B.applyLine(app, { ...plan, intent: 'available' }, f.call);
+  assert.strictEqual(r.assign.status, 'done');
+  assert.deepStrictEqual(f.calls.find(c => c.op === 'assign').args.body, { mobileAppAssignments: [
+    { '@odata.type': G + 'mobileAppAssignment', intent: 'required', settings: null, target: groupOf('g2') },
+    { '@odata.type': G + 'mobileAppAssignment', intent: 'available', settings: A.appSettings(G + 'androidManagedStoreApp'), target: groupOf('g1') }] });
+  // A system app does not take Available: nothing sent
+  f = fake({ existing: { status: 200, body: { '@odata.type': G + 'androidManagedStoreApp', isSystemApp: true } } });
+  r = await B.applyLine(app, { ...plan, intent: 'available' }, f.call);
+  assert.deepStrictEqual([r.assign.status, r.assign.error], ['skipped', 'bulkAssign.err.noIntent']);
+  assert.ok(!f.calls.some(c => c.op === 'assign'));
+  // No deployment type chosen: nothing read, nothing sent. A policy does not need one
+  f = fake({});
+  r = await B.applyLine(app, plan, f.call);
+  assert.deepStrictEqual([r.assign.status, r.assign.error], ['skipped', 'bulkAssign.err.noIntent']);
+  assert.deepStrictEqual(f.calls, []);
+
   // A filter on a script: skipped without any call. Dropping the filter would reach more devices than asked
   f = fake({});
   const withFilter = { ...plan, target: A.targetOf({ mode: 'group', groupId: 'g1', filterId: 'f1' }) };
@@ -189,7 +243,8 @@ assert.deepStrictEqual(A.groupsIn(null), []);
   assert.deepStrictEqual(seen, [[0, 'done'], [1, 'done']]);
 
   // Only assignable types are listed, each from a closed URL
-  assert.deepStrictEqual(B.KINDS, ['sc', 'dc', 'comp', 'admx', 'ps', 'sh', 'cattr']);
+  assert.deepStrictEqual(B.KINDS, ['sc', 'dc', 'comp', 'admx', 'ps', 'sh', 'cattr', 'app']);
+  assert.ok(B.listUrl('app').startsWith('https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?$select='));
   assert.ok(B.listUrl('sh').startsWith(BASE + 'deviceShellScripts?$select='));
   assert.strictEqual(B.listUrl('sc'), BASE + 'configurationPolicies');
   assert.strictEqual(B.listUrl('rem'), null);

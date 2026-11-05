@@ -331,10 +331,11 @@ Like As-Built, it lists your policies. Instead of exporting them, it adds an ass
 2. Choose a target: an Entra ID group (search by name, or pasted ID), **All users** or **All devices**. As options: an assignment filter, included or excluded, and scope tags.
 3. Click **Apply (n)**, check the tenant, the target and the number of policies, then click **OK**.
 
-**Supported**: settings catalog, configuration profiles, compliance, administrative templates (ADMX), PowerShell scripts, macOS shell scripts, macOS custom attributes. Not remediations (a schedule to choose) or apps (an intent to choose).
+**Supported**: settings catalog, configuration profiles, compliance, administrative templates (ADMX), PowerShell scripts, macOS shell scripts, macOS custom attributes, apps. Not remediations (a schedule to choose).
 
 - **Adds only**: Graph replaces every assignment of an object on each call. The extension therefore reads the existing assignments and sends them back with the new one. If that read fails or is incomplete, nothing is sent. No assignment and no scope tag is removed.
 - **Already in place**: if the group is already assigned or excluded, or if the same target already exists, nothing is sent, even with another filter. An excluded group is never turned into an inclusion.
+- **Apps**: as soon as an app is checked, choose its deployment type: **Required**, **Available for enrolled devices**, **Available with or without enrollment** (Android and iOS) or **Uninstall**. There is no default. An Android Enterprise system app takes only Required or Uninstall. Existing assignments keep their type and settings, and a group takes a single type. A Managed Google Play app gets the default auto-update mode.
 - **Group or built-in target, not both**: if a group is already assigned, **All users** and **All devices** are refused, and the other way round. Nothing is sent and the row says so. An excluded group does not block: "all devices except this group" stays possible.
 - **Policy sets**: their assignments stay managed by the set and are not sent back.
 - **Filters**: Microsoft does not support them on PowerShell and shell scripts, and the extension treats custom attributes the same way. Such a row is skipped and says so, rather than being assigned without its filter, which would reach more devices than intended.
@@ -342,7 +343,7 @@ Like As-Built, it lists your policies. Instead of exporting them, it adds an ass
 - **Permissions**: same write permissions as Policy Import. The Intune role must be active (PIM) and its scope tags must cover the policies.
 - **Log**: Change Snapshot logs each change, without one ticket card per object.
 
-> **Check the target before clicking OK.** An assignment to **All devices** applies to the whole fleet, and an assigned script runs on devices. OK stays a single click, including on a PROD tenant.
+> **Check the target before clicking OK.** An assignment to **All devices** applies to the whole fleet, an assigned script runs on devices, and an app set to **Required** or **Uninstall** is installed or removed with no user action. OK stays a single click, including on a PROD tenant.
 
 - Code: `bulk-assign/lib.js` and `shared/assign-lib.js` (tested: `node bulk-assign/test.js`), `bulk-assign/page.js`, `shared/graph-bridge.js`, `shared/assign-form.js`.
 
