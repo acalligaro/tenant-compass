@@ -22,7 +22,7 @@
   }
 
   // claims: { upn, tid } decoded from the caller's token (never the token itself).
-  function emit(method, url, status, reqBody, resBody, claims) {
+  function emit(method, url, status, reqBody, resBody, claims, silent) {
     if (BATCH.test(url)) {
       // Sub-requests are relative URLs, never nested batches, so this recursion is one level deep.
       for (const s of L.expandBatch(url, json(reqBody), json(resBody)))
@@ -31,7 +31,7 @@
     }
     try {
       if (method === 'GET') claims = null;
-      window.postMessage({ type: TYPE, method, url, status, reqBody: json(reqBody), resBody: json(resBody), claims }, location.origin);
+      window.postMessage({ type: TYPE, method, url, status, reqBody: json(reqBody), resBody: json(resBody), claims, silent: silent === true }, location.origin);
     } catch {}
   }
 
@@ -55,6 +55,7 @@
       if (wanted(method, url)) {
         info = {
           url, method,
+          silent: !!(init && init.tenantCompassSilent), // Policy Import: logged, but no ticket card per created object
           auth: authOf(init && init.headers) || (isReq ? input.headers.get('authorization') : null),
           // Clone before the original fetch consumes a Request body.⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
           body: init && init.body != null ? Promise.resolve(init.body) : isReq && method !== 'GET' ? input.clone().text() : Promise.resolve(null),
@@ -67,7 +68,7 @@
         if (!res.ok) return;
         const resText = method => method === 'DELETE' ? Promise.resolve(null) : res.clone().text();
         Promise.all([info.body.catch(() => null), resText(info.method).catch(() => null)])
-          .then(([b, t]) => emit(info.method, info.url, res.status, typeof b === 'string' ? b : null, t, L.jwtClaims(info.auth)));
+          .then(([b, t]) => emit(info.method, info.url, res.status, typeof b === 'string' ? b : null, t, L.jwtClaims(info.auth), info.silent));
       }, () => {});
     }
     return p;

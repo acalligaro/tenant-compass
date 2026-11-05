@@ -6,7 +6,7 @@
   const COLLECTIONS = {
     deviceManagement: [
       'configurationPolicies', 'compliancePolicies', 'deviceConfigurations', 'deviceCompliancePolicies',
-      'groupPolicyConfigurations', 'intents', 'deviceManagementScripts', 'deviceHealthScripts', 'deviceShellScripts',
+      'groupPolicyConfigurations', 'intents', 'deviceManagementScripts', 'deviceHealthScripts', 'deviceShellScripts', 'deviceCustomAttributeShellScripts',
       'windowsFeatureUpdateProfiles', 'windowsQualityUpdateProfiles', 'windowsDriverUpdateProfiles',
       'deviceEnrollmentConfigurations', 'windowsAutopilotDeploymentProfiles', 'assignmentFilters',
     ],

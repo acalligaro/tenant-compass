@@ -221,5 +221,32 @@ assert.ok(!L.confirmMatches('', ''));
   assert.deepStrictEqual(Object.keys(dict.fr).sort(), Object.keys(dict.en).sort());
   for (const k of new Set(fs.readFileSync(path.join(__dirname, 'lib.js'), 'utf8').match(/policyImport\.[a-zA-Z.]+/g))) assert.ok(dict.fr[k], 'missing ' + k);
 
+  // Opt-in: off by default in both copies of DEFAULTS, and registered for the Intune portal only
+  const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+  for (const f of ['background.js', 'popup.js']) assert.match(read(f), /const DEFAULTS = \{[^}]*policyImport: false/, f);
+  const registration = /policyImport: \[\{[\s\S]*?\}\],/.exec(read('background.js'))?.[0] || '';
+  assert.match(registration, /'policy-import\/lib\.js', 'policy-import\/page\.js'\]/);
+  assert.match(registration, /world: 'MAIN'/);
+  assert.ok(!/portal\.azure\.com|entra\.microsoft\.com/.test(registration), 'Intune console only');
+  for (const k of ['f.policyImport', 'f.policyImport.desc']) assert.strictEqual((read('shared/i18n.js').match(new RegExp(`'${k}':`, 'g')) || []).length, 2, k);
+
+  // Static checks of the page script: a single creation call, no token leak
+  const pageSrc = fs.readFileSync(path.join(__dirname, 'page.js'), 'utf8');
+  assert.ok(!/'(PATCH|PUT|DELETE)'/.test(pageSrc), 'only POST may write');
+  assert.strictEqual((pageSrc.match(/method: 'POST'/g) || []).length, 1, 'one single write call');
+  assert.ok(!/console\.|chrome\.storage|localStorage|innerHTML|\$batch/.test(pageSrc));
+  assert.ok(/credentials: 'omit'/.test(pageSrc));
+  assert.ok(/window\.fetch\(/.test(pageSrc), 'must go through window.fetch so Change Snapshot sees it');
+  assert.ok(!/nativeFetch/.test(pageSrc));
+  assert.ok(!/\/assign\b/.test(pageSrc), 'never assigns');
+  assert.ok(!/id: m\.id, \.\.\./.test(pageSrc), 'the created object id must not overwrite the correlation id of the relay');
+  assert.ok(!/method: 'POST'/.test(read('as-built/page.js')), 'As-Built stays read-only');
+  for (const k of new Set(pageSrc.match(/policyImport\.[a-zA-Z.]+/g) || [])) assert.ok(dict.fr[k], 'missing ' + k);
+
+  // Change Snapshot logs each creation without opening one ticket card per object
+  assert.ok(/tenantCompassSilent: true/.test(pageSrc));
+  assert.ok(/init\.tenantCompassSilent/.test(read('change-snapshot/page.js')));
+  assert.ok(/!p\.silent/.test(read('change-snapshot/content.js')));
+
   console.log('policy-import: all checks passed');
 })().catch(err => { console.error(err); process.exit(1); });

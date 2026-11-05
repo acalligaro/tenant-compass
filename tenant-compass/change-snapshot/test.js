@@ -9,6 +9,7 @@ const ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 // ---------- parsePolicyRef ----------
 assert.deepStrictEqual(parsePolicyRef(`${G}/configurationPolicies/${ID}`), { type: 'configurationPolicies', id: ID, sub: '' });
 assert.deepStrictEqual(parsePolicyRef(`${G}/configurationPolicies('${ID}')`), { type: 'configurationPolicies', id: ID, sub: '' }); // portal key syntax
+assert.deepStrictEqual(parsePolicyRef(`${G}/deviceCustomAttributeShellScripts`), { type: 'deviceCustomAttributeShellScripts', id: null, sub: '' }); // creation by Policy Import
 assert.deepStrictEqual(parsePolicyRef(`${G}/configurationPolicies/${ID}/settings?$expand=settingDefinitions&top=1000`),
   { type: 'configurationPolicies', id: ID, sub: 'settings' });
 assert.deepStrictEqual(parsePolicyRef(`https://graph.microsoft.com/v1.0/deviceManagement/deviceCompliancePolicies/${ID}/microsoft.graph.assign`),

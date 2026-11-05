@@ -17,7 +17,7 @@
     if (!isObjOrNull(d.reqBody) || !isObjOrNull(d.resBody) || !isObjOrNull(d.claims)) return null;
     const c = d.claims;
     if (c && !['upn', 'tid'].every(k => c[k] === null || isStr(c[k]))) return null;
-    return { method: d.method, url: d.url, status: d.status, reqBody: d.reqBody, resBody: d.resBody, claims: c && { upn: c.upn, tid: c.tid } };
+    return { method: d.method, url: d.url, status: d.status, reqBody: d.reqBody, resBody: d.resBody, claims: c && { upn: c.upn, tid: c.tid }, silent: d.silent === true };
   }
 
   window.addEventListener('message', e => {
@@ -58,6 +58,7 @@
     p.after = after;
     p.calls.push([o.method, o.url]);
     p.claims = o.claims || p.claims;
+    p.silent = p.silent || o.silent;
     if (after === null) snaps.delete(k); else snaps.set(k, after);
     clearTimeout(p.timer);
     p.timer = setTimeout(() => flush(k).catch(err => warn('entrée non créée :', err)), QUIET_MS);
@@ -93,7 +94,7 @@
     try { await chrome.storage.local.set({ ['e:' + entry.id]: entry }); } catch (err) { warn('écriture du journal impossible :', err.message); return; } // logged before asking, so a dismiss still leaves a trace
     // Ticket dialog per environment (menu ⚙ settings). Unclassified tab: dialog, as before.
     const ask = entry.env === 'prod' ? snapshot.promptProd !== false : entry.env === 'non-prod' ? snapshot.promptNonProd === true : true;
-    if (ask) showDialog(entry);
+    if (ask && !p.silent) showDialog(entry);
   }
 
   // ---------- non-modal ticket dialog ----------⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
