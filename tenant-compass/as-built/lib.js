@@ -43,11 +43,13 @@
     return '?';
   }
 
-  const SCRIPT_KINDS = { ps: 'Windows', sh: 'macOS', rem: 'Windows' };
-  const scriptType = k => ({ ps: () => T('asBuilt.type.ps', 'Script PowerShell'), sh: () => T('asBuilt.type.sh', 'Script shell'), rem: () => T('asBuilt.type.rem', 'Remédiation') })[k]();
+  const SCRIPT_KINDS = { ps: 'Windows', sh: 'macOS', cattr: 'macOS', rem: 'Windows' };
+  const scriptType = k => ({ ps: () => T('asBuilt.type.ps', 'Script PowerShell'), sh: () => T('asBuilt.type.sh', 'Script shell'), cattr: () => T('asBuilt.type.cattr', 'Attribut personnalisé macOS'), rem: () => T('asBuilt.type.rem', 'Remédiation') })[k]();
+  // Graph answers 400 "No OData route" to GET deviceShellScripts/{id}/assignments (seen on a real tenant, 2026-11-05, although documented): read through $expand.
+  const EXPAND_ASSIGNMENTS = new Set(['sh', 'cattr']);
 
   // kind: 'sc' Settings Catalog, 'dc' deviceConfigurations, 'comp' compliance, 'admx' groupPolicyConfigurations,
-  // 'app' mobileApps, 'ps' deviceManagementScripts, 'sh' deviceShellScripts, 'rem' deviceHealthScripts,
+  // 'app' mobileApps, 'ps' deviceManagementScripts, 'sh' deviceShellScripts, 'cattr' deviceCustomAttributeShellScripts, 'rem' deviceHealthScripts,
   // 'ap' Autopilot deployment profiles, 'apdev' Autopilot devices (one item for all), 'enr' deviceEnrollmentConfigurations (ESP...),
   // 'dep' Apple ADE (DEP) enrollment profiles, 'android' Android Enterprise / AOSP enrollment profiles, 'brand' Intune branding profiles
   // (Tenant administration > Customization), 'role' Intune role definitions, 'tag' scope tags, 'mdm' Windows MDM auto-enrollment (Entra mobility).
@@ -72,7 +74,7 @@
     if (kind === 'tag') return { ...base, name, type: T('asBuilt.type.tag', "Balise d'étendue"), platform: '' };
     if (kind === 'mdm') return { ...base, name, type: T('asBuilt.type.mdm', 'Inscription automatique MDM (Entra)'), platform: 'Windows' };
     if (kind === 'mam') return { ...base, name, type: T('asBuilt.type.mam', 'Inscription automatique MAM (Entra)'), platform: 'Windows' };
-    // Entra console
+    // Entra⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ console
     if (kind === 'ca') return { ...base, name, modified: raw.modifiedDateTime || raw.createdDateTime || '', platform: '',
       type: T('asBuilt.type.ca', 'Accès conditionnel') + ` (${caState(raw.state)})` };
     if (kind === 'loc') return { ...base, name, modified: raw.modifiedDateTime || '', platform: '',
@@ -163,7 +165,7 @@
     return rows;
   }
 
-  // ---------- templates (deviceConfigurations / compliance) ----------
+  // ---------- templates (deviceConfigurations / compliance)⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ ----------
 
   const SKIP = new Set(['id', 'displayName', 'description', 'createdDateTime', 'lastModifiedDateTime', 'version', 'roleScopeTagIds', 'supportsScopeTags', 'deviceManagementApplicabilityRuleOsEdition', 'deviceManagementApplicabilityRuleOsVersion', 'deviceManagementApplicabilityRuleDeviceMode', 'largeIcon']);
   // Images (base64), removed from the policy before export by page.js: branding logos, Android QR code.
@@ -172,6 +174,8 @@
   const SECRET_KEYS = new Set(['tokenValue', 'qrCodeContent', 'deviceAccountPassword', 'productKey']);
   // Base64 script bodies: exported as separate files (scriptFiles), not dumped into the document.
   const SCRIPT_KEYS = new Set(['scriptContent', 'detectionScriptContent', 'remediationScriptContent']);
+  // Base64 bodies of custom profiles (top level of the policy only): same treatment.
+  const PROFILE_KEYS = new Set(['payload', 'configurationXml']);
 
   const yes = () => T('asBuilt.value.yes', 'Oui'), no = () => T('asBuilt.value.no', 'Non');
 
@@ -180,7 +184,7 @@
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
-  // Flattens a template object into rows. null, empty and "notConfigured" are skipped (not configured in the portal).
+  // Flattens a template object into rows. null, empty and "notConfigured" are skipped (not configured in⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ the portal).
   function propertyRows(obj, path = '') {
     const rows = [];
     for (const [k, v] of Object.entries(obj || {})) {
@@ -190,6 +194,7 @@
       const sub = path ? `${path} > ${name}` : name;
       if (SECRET_KEYS.has(k)) { rows.push({ path, name, value: mask() }); continue; }
       if (SCRIPT_KEYS.has(k)) { rows.push({ path, name, value: T('asBuilt.value.scriptFile', '(script exporté dans un fichier séparé)') }); continue; }
+      if (!path && PROFILE_KEYS.has(k)) { rows.push({ path, name, value: T('asBuilt.value.profileFile', '(profil exporté dans un fichier séparé)') }); continue; }
       if (Array.isArray(v) && typeof v[0] === 'object') v.forEach((o, i) => rows.push(...propertyRows(o, `${sub} [${i + 1}]`)));
       else if (Array.isArray(v)) rows.push({ path, name, value: v.join(', ') });
       else if (typeof v === 'object') rows.push(...propertyRows(v, sub));
@@ -200,7 +205,7 @@
 
   // ---------- ADMX ----------
 
-  // values: definitionValues ($expand=definition) each with presentationValues ($expand=presentation).
+  // values: definitionValues ($expand=definition)⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ each with presentationValues ($expand=presentation).
   function admxRows(values) {
     const rows = [];
     for (const dv of values || []) {
@@ -349,27 +354,36 @@ ${body}
   }
 
   const JSON_TYPES = { sc: 'settingsCatalog', dc: 'deviceConfiguration', comp: 'compliancePolicy', admx: 'groupPolicyConfiguration',
-    app: 'mobileApp', ps: 'deviceManagementScript', sh: 'deviceShellScript', rem: 'deviceHealthScript',
+    app: 'mobileApp', ps: 'deviceManagementScript', sh: 'deviceShellScript', cattr: 'deviceCustomAttributeShellScript', rem: 'deviceHealthScript',
     ap: 'windowsAutopilotDeploymentProfile', apdev: 'windowsAutopilotDeviceIdentities', enr: 'deviceEnrollmentConfiguration',
     dep: 'depEnrollmentProfile', android: 'androidDeviceOwnerEnrollmentProfile', brand: 'intuneBrandingProfile',
     role: 'roleDefinition', tag: 'roleScopeTag', mdm: 'mobileDeviceManagementPolicy', mam: 'mobileAppManagementPolicy',
     ca: 'conditionalAccessPolicy', loc: 'namedLocation', auths: 'authenticationStrengthPolicy', authm: 'authenticationMethodConfiguration' };
 
-  // ---------- script files ----------
+  // ----------⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ script files ----------
+
+  const b64Bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 
   function b64Text(b64) {
-    try { return new TextDecoder().decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0))); } catch { return ''; }
+    try { return new TextDecoder().decode(b64Bytes(b64)); } catch { return ''; }
   }
 
-  // Script bodies attached to a policy: [{ suffix, ext, text }] (text decoded from Graph's base64). File name = policy name + suffix.
+  // File bodies attached to a policy, decoded from Graph's base64: [{ suffix, ext, text | bytes }]. File name = policy name + suffix.
   // App rules: beta `rules` (win32LobAppPowerShellScriptRule, ruleType detection|requirement) and legacy `detectionRules`.
   function scriptFiles(kind, policy) {
     if (!policy) return [];
     const out = [];
-    const add = (b64, suffix, ext) => { const text = b64 && b64Text(b64); if (text) out.push({ suffix, ext, text }); };
+    // No extension given: shell script, its shebang tells zsh from sh.
+    const add = (b64, suffix, ext) => { const text = b64 && b64Text(b64); if (text) out.push({ suffix, ext: ext || (/^#!.*\bzsh\b/.test(text) ? 'zsh' : 'sh'), text }); };
+    // Profiles stay in bytes: a signed profile is binary (CMS) and would not survive a text decoding.
+    const addBytes = (b64, ext) => { try { if (b64) out.push({ suffix: '', ext, bytes: b64Bytes(b64) }); } catch {} };
     const ext = (policy.fileName || '').match(/\.(\w+)$/)?.[1];
     if (kind === 'ps') add(policy.scriptContent, '', ext || 'ps1');
-    if (kind === 'sh') add(policy.scriptContent, '', ext || 'sh');
+    if (kind === 'sh' || kind === 'cattr') add(policy.scriptContent, '', ext);
+    if (kind === 'dc') {
+      addBytes(policy.payload, 'mobileconfig');
+      addBytes(policy.configurationXml, ext || 'plist');
+    }
     if (kind === 'rem') {
       add(policy.detectionScriptContent, ' - detection', 'ps1');
       add(policy.remediationScriptContent, ' - remediation', 'ps1');
@@ -383,6 +397,8 @@ ${body}
         n[t] = (n[t] || 0) + 1;
         add(r.scriptContent, ` - ${t}${n[t] > 1 ? ' ' + n[t] : ''}`, 'ps1');
       }
+      add(policy.preInstallScript?.scriptContent, ' - preinstall'); // macOSPkgApp
+      add(policy.postInstallScript?.scriptContent, ' - postinstall');
     }
     return out;
   }
@@ -406,6 +422,7 @@ ${body}
           ...(p.kind === 'apdev' ? { devices: r.devices || [] } : {}),
           ...(p.kind === 'role' ? { roleAssignments: r.roleAssignments || [] } : {}),
           assignments: r.assignments || [],
+          ...(r.assignmentsError ? { assignmentsError: r.assignmentsError } : {}),
           filters: r.filters || [],
           groups: r.groups || [],
         });
@@ -461,7 +478,7 @@ ${body}
       .concat([...of(u.excludeUsers), ...of(u.excludeGroups), ...of(u.excludeRoles, role)].map(group => ({ group, mode: exc, filter: '' })));
   }
 
-  // Conditional Access policy as readable rows: state, then conditions, grant and session controls (keys humanised).
+  // Conditional Access policy⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ as readable rows: state, then conditions, grant and session controls (keys humanised).
   // Users, groups and roles are in the assignments table (caAssignmentRows), not repeated here.
   function caRows(policy, names = {}) {
     const p = withNames(policy, names);
@@ -547,7 +564,7 @@ ${body}
   // "Windows, macOS" -> ['Windows', 'macOS'] (policySummary joins multi-platform policies with ", ").⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
   const platformsOf = p => String(p.platform || '').split(',').map(s => s.trim()).filter(Boolean);
 
-  const api = { caAssignmentRows, caState, isEntraToken, tokenKinds, jwtsIn, caIds, withNames, caRows, isIntuneToken, guidsIn, orderItems, IMAGE_KEYS, autopilotRows, autopilotCsv, roleAssignmentRows, mdmAssignmentRows, scriptFiles, fileName, platformsOf, jwtTid, maskSecrets, toJson, htmlEscape, mdEscapeCell, fmtDate, policySummary, categoryPath, settingRows, propertyRows, admxRows, assignmentRows, toMarkdown, toWordHtml };
+  const api = { EXPAND_ASSIGNMENTS, caAssignmentRows, caState, isEntraToken, tokenKinds, jwtsIn, caIds, withNames, caRows, isIntuneToken, guidsIn, orderItems, IMAGE_KEYS, autopilotRows, autopilotCsv, roleAssignmentRows, mdmAssignmentRows, scriptFiles, fileName, platformsOf, jwtTid, maskSecrets, toJson, htmlEscape, mdEscapeCell, fmtDate, policySummary, categoryPath, settingRows, propertyRows, admxRows, assignmentRows, toMarkdown, toWordHtml };
   if (typeof module !== 'undefined') module.exports = api;
   else globalThis.AsBuiltLib = api;
 })();

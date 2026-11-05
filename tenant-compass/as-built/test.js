@@ -290,3 +290,45 @@ assert.deepStrictEqual(L.caIds('authm', { includeTargets: [{ targetType: 'group'
 assert.ok(JSON.stringify(L.withNames({ includeTargets: [{ id: 'all_users' }] }, {})).includes('Tous les utilisateurs'));
 assert.ok(L.toMarkdown([], 'Dossier Entra').startsWith('# Dossier Entra'));
 console.log('as-built: new kinds checks passed');
+
+// macOS: shell scripts, custom attributes, pkg app scripts, custom profiles (fields as returned by Graph beta on a real tenant).
+assert.deepStrictEqual(L.scriptFiles('sh', { fileName: 'rename.zsh', scriptContent: enc64('#!/bin/zsh\necho é') }), [{ suffix: '', ext: 'zsh', text: '#!/bin/zsh\necho é' }]);
+assert.deepStrictEqual(L.scriptFiles('cattr', { fileName: 'version.sh', scriptContent: enc64('#!/bin/zsh') }).map(f => f.ext), ['sh']); // the uploaded extension wins
+assert.deepStrictEqual(L.scriptFiles('cattr', { scriptContent: enc64('#!/bin/zsh\nsw_vers') }).map(f => f.ext), ['zsh']); // no file name: shebang
+assert.deepStrictEqual(L.scriptFiles('sh', { scriptContent: enc64('#!/bin/sh\nid') }).map(f => f.ext), ['sh']);
+assert.deepStrictEqual(L.scriptFiles('app', { '@odata.type': '#microsoft.graph.macOSPkgApp', fileName: 'a.pkg',
+  preInstallScript: { scriptContent: enc64('#!/bin/sh\npre') }, postInstallScript: { scriptContent: enc64('#!/bin/zsh\npost') } }).map(f => `${f.suffix}.${f.ext}:${f.text}`),
+  [' - preinstall.sh:#!/bin/sh\npre', ' - postinstall.zsh:#!/bin/zsh\npost']);
+assert.deepStrictEqual(L.scriptFiles('app', { preInstallScript: null, postInstallScript: null }), []);
+
+const plist = '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>Clé</key><string>é</string></dict></plist>\n';
+const bytesOf = f => Buffer.from(f.bytes).toString('utf8');
+for (const t of ['macOSCustomConfiguration', 'iosCustomConfiguration']) {
+  const [f, ...rest] = L.scriptFiles('dc', { '@odata.type': `#microsoft.graph.${t}`, payloadFileName: 'cato.xml', payload: enc64(plist) });
+  assert.deepStrictEqual([f.suffix, f.ext, bytesOf(f), rest.length], ['', 'mobileconfig', plist, 0]);
+}
+const signed = Buffer.from([0x30, 0x82, 0xff, 0xfe, 0x00, 0x80]); // signed profile = CMS, binary: must survive byte for byte
+assert.deepStrictEqual([...L.scriptFiles('dc', { payload: signed.toString('base64') })[0].bytes], [...signed]);
+const pref = L.scriptFiles('dc', { '@odata.type': '#microsoft.graph.macOSCustomAppConfiguration', fileName: 'com.cato.client.plist', configurationXml: enc64(plist) });
+assert.deepStrictEqual([pref[0].ext, bytesOf(pref[0])], ['plist', plist]);
+assert.strictEqual(L.scriptFiles('dc', { configurationXml: enc64(plist) })[0].ext, 'plist');
+assert.deepStrictEqual(L.scriptFiles('dc', { displayName: 'no custom body' }), []);
+assert.deepStrictEqual(L.scriptFiles('sc', { payload: enc64(plist) }), []);
+
+// Documents: no base64 dump, the row points to the file. A nested "payload" is not a profile body.
+const profileRows = L.propertyRows({ payloadName: 'cato', payload: enc64(plist), configurationXml: enc64(plist), other: { payload: 'kept' } });
+assert.deepStrictEqual(profileRows.map(r => r.value), ['cato', '(profil exporté dans un fichier séparé)', '(profil exporté dans un fichier séparé)', 'kept']);
+document.documentElement.dataset.tenantCompassLang = 'en';
+assert.strictEqual(L.propertyRows({ payload: 'x' })[0].value, '(profile exported to a separate file)');
+assert.strictEqual(L.policySummary('cattr', { id: 'c', displayName: 'OS' }).type, 'macOS custom attribute');
+document.documentElement.dataset.tenantCompassLang = 'fr';
+
+const cattr = L.policySummary('cattr', { id: 'c', displayName: 'OS version' });
+assert.deepStrictEqual([cattr.platform, cattr.type], ['macOS', 'Attribut personnalisé macOS']);
+
+// Graph answers 400 "No OData route" to GET deviceShellScripts/{id}/assignments: these kinds read assignments through $expand.
+assert.ok(L.EXPAND_ASSIGNMENTS.has('sh') && L.EXPAND_ASSIGNMENTS.has('cattr') && !L.EXPAND_ASSIGNMENTS.has('ps'));
+const partial = L.toJson([{ kind: 'cattr', id: 'c', raw: { policy: { id: 'c' }, assignmentsError: 'Graph 403' } }], {}).policies[0];
+assert.deepStrictEqual([partial.type, partial.policy.id, partial.assignmentsError], ['deviceCustomAttributeShellScript', 'c', 'Graph 403']); // config kept, failure visible
+assert.ok(!('assignmentsError' in L.toJson([{ kind: 'sh', id: 's', raw: { policy: {} } }], {}).policies[0]));
+console.log('as-built: macOS scripts and profiles checks passed');

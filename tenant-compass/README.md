@@ -133,7 +133,7 @@ Bouton **As-Built** en bas à gauche. Le panneau liste les stratégies et applic
 |---|---|
 | ![Panneau As-Built : recherche, filtres, liste des stratégies, boutons d'export](docs/img/readme/fr/02-as-built-panneau.jpg) | ![As-Built avec trois stratégies cochées](docs/img/readme/fr/03-as-built-selection.jpg) |
 
-- Sources (console Intune) : catalogue de paramètres, profils de configuration, conformité, ADMX, applications, scripts PowerShell, scripts shell macOS, remédiations, profils Autopilot, appareils Autopilot, inscription (page d'état d'inscription ESP, restrictions, Windows Hello...), profils Apple ADE (DEP), profils d'inscription Android Enterprise / AOSP, personnalisation du tenant (profils de marque), rôles Intune (RBAC, avec leurs affectations : membres, étendue, balises), balises d'étendue.
+- Sources (console Intune) : catalogue de paramètres, profils de configuration, conformité, ADMX, applications, scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, remédiations, profils Autopilot, appareils Autopilot, inscription (page d'état d'inscription ESP, restrictions, Windows Hello...), profils Apple ADE (DEP), profils d'inscription Android Enterprise / AOSP, personnalisation du tenant (profils de marque), rôles Intune (RBAC, avec leurs affectations : membres, étendue, balises), balises d'étendue.
 - Filtres : recherche par nom, type, OS. La case en tête de liste coche ou décoche tout ce qui est affiché.
 - **Stratégie ouverte** : celle affichée dans le portail est placée en tête de liste, sans être cochée. Les éléments cochés remontent ensuite dans l'ordre où ils ont été cochés ; la liste ne défile pas quand un élément remonte.
 - **Appareils Autopilot** : un seul élément pour tout l'inventaire, exporté en plus en CSV (`autopilot-devices-<date>.csv`, séparateur `;`) : numéro de série, fabricant, modèle, group tag, utilisateur, état du profil et de l'inscription. **Le hachage matériel (HWID) n'est pas inclus** : Graph ne le renvoie pas pour un appareil déjà inscrit. Le fichier n'est donc pas réimportable dans Autopilot.
@@ -144,7 +144,7 @@ Bouton **As-Built** en bas à gauche. Le panneau liste les stratégies et applic
 ![As-Built Entra sur la page Accès conditionnel : deux stratégies d'accès conditionnel et la méthode Fido2 cochées en tête de liste, puis niveaux et méthodes d'authentification](docs/img/readme/fr/17-as-built-entra.jpg)
 
 - Mode d'export : **One policy per file** (défaut) ou toutes les stratégies dans un seul fichier. **Copy MD** copie toujours un seul bloc Markdown.
-- **Export scripts** (coché par défaut) : télécharge à côté du document, décodés depuis le Base64 de Graph (`.ps1` / `.sh`), les scripts, remédiations (détection + correction) et scripts PowerShell de détection / exigence des applications Win32.
+- **Exporter scripts et profils** (coché par défaut) : télécharge à côté du document, décodés depuis le Base64 de Graph, les scripts (`.ps1`, `.sh`, `.zsh`), attributs personnalisés macOS, remédiations (détection + correction), scripts PowerShell de détection / exigence des applications Win32, scripts de pré / post-installation des applications PKG macOS et profils personnalisés (`.mobileconfig`, fichiers de préférences `.plist`). Ces fichiers sont des copies exactes, non masquées : un secret écrit dans un script ou un profil y reste en clair.
 - Le fichier `.intunewin` n'est pas exportable : Graph n'expose aucune URL de téléchargement d'un contenu d'application publié (l'URI de stockage n'existe que pendant l'upload, et le contenu est chiffré).
 
 ## Assignment Lens

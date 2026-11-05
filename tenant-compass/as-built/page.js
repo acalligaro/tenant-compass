@@ -1,7 +1,7 @@
 // MAIN world, every frame of the Intune, Entra and Azure portals.⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
 // All frames: observe the bearer token the portal sends to graph.microsoft.com (memory only) and answer read-only GET relays.
 // Top frame: floating button, picker, exports. The list depends on the console: Intune objects on intune / endpoint.microsoft.com,
-// Entra objects (Conditional Access, authentication, mobility) on entra.microsoft.com and portal.azure.com.
+// Entra objects (Conditional Access, authentication, mobility)⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ on entra.microsoft.com and portal.azure.com.
 (() => {
   const L = globalThis.AsBuiltLib;
   const T = (k, v) => (globalThis.__tenantCompassI18n ? globalThis.__tenantCompassI18n.t(k, v) : k);
@@ -11,7 +11,7 @@
   const isTop = window === window.top;
   const CONSOLE = /^https:\/\/(intune|endpoint)\.microsoft\.com$/.test(location.origin) ? 'intune' : 'entra'; // top frame only
   const nativeFetch = window.fetch.bind(window);
-  // One Graph token per console (Intune scopes / Policy.Read.All): never persisted, never logged, never posted to another frame.
+  // One Graph token per console (Intune scopes / Policy.Read.All): never persisted,⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ never logged, never posted to another frame.
   const tokens = { intune: null, entra: null };
 
   // ---------- token observation ----------⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
@@ -22,7 +22,7 @@
       keep(auth.replace(/^Bearer\s+/i, ''));
     } catch {}
   }
-  // Other apps' Graph tokens (no scope for this console) would answer 403 everywhere.
+  // Other apps' Graph tokens⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ (no scope for this console) would answer 403 everywhere.
   const keep = t => { for (const k of L.tokenKinds(t)) tokens[k] = t; };
 
   // The shell hands tokens to its extension Web Worker over MessagePort (Entra blades run there): read them on the way.
@@ -154,6 +154,7 @@
     ['app', '/deviceAppManagement/mobileApps?$select=id,displayName,description,lastModifiedDateTime'],
     ['ps', '/deviceManagement/deviceManagementScripts?$select=id,displayName,description,lastModifiedDateTime'],
     ['sh', '/deviceManagement/deviceShellScripts?$select=id,displayName,description,lastModifiedDateTime'],
+    ['cattr', '/deviceManagement/deviceCustomAttributeShellScripts?$select=id,displayName,description,lastModifiedDateTime'],
     ['rem', '/deviceManagement/deviceHealthScripts?$select=id,displayName,description,lastModifiedDateTime'],
     ['ap', '/deviceManagement/windowsAutopilotDeploymentProfiles'],
     // One item for the whole device list (can hold thousands of devices): read only when exported.
@@ -182,14 +183,14 @@
   const srcLabel = kind => T('asBuilt.src.' + kind); // SOURCES = [kind, list path or loader]
   const BASE = { sc: '/deviceManagement/configurationPolicies', dc: '/deviceManagement/deviceConfigurations', comp: '/deviceManagement/deviceCompliancePolicies',
     admx: '/deviceManagement/groupPolicyConfigurations', app: '/deviceAppManagement/mobileApps', ps: '/deviceManagement/deviceManagementScripts',
-    sh: '/deviceManagement/deviceShellScripts', rem: '/deviceManagement/deviceHealthScripts', ap: '/deviceManagement/windowsAutopilotDeploymentProfiles',
+    sh: '/deviceManagement/deviceShellScripts', cattr: '/deviceManagement/deviceCustomAttributeShellScripts', rem: '/deviceManagement/deviceHealthScripts', ap: '/deviceManagement/windowsAutopilotDeploymentProfiles',
     enr: '/deviceManagement/deviceEnrollmentConfigurations', android: '/deviceManagement/androidDeviceOwnerEnrollmentProfiles',
     brand: '/deviceManagement/intuneBrandingProfiles', role: '/deviceManagement/roleDefinitions', tag: '/deviceManagement/roleScopeTags',
     mdm: '/policies/mobileDeviceManagementPolicies', mam: '/policies/mobileAppManagementPolicies',
     ca: '/identity/conditionalAccess/policies', loc: '/identity/conditionalAccess/namedLocations', auths: '/policies/authenticationStrengthPolicies',
     authm: '/policies/authenticationMethodsPolicy/authenticationMethodConfigurations' };
   const pathOf = p => p.kind === 'dep' ? `/deviceManagement/depOnboardingSettings/${enc(p.parent)}/enrollmentProfiles/${enc(p.id)}` : `${BASE[p.kind]}/${enc(p.id)}`;
-  // No assignments endpoint: ADE and Android profiles are tied to tokens, roles are assigned through roleAssignments, MDM scope sits on the policy.
+  // No assignments endpoint: ADE and Android⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ profiles are tied to tokens, roles are assigned through roleAssignments, MDM scope sits on the policy.
   const NO_ASSIGNMENTS = new Set(['apdev', 'dep', 'android', 'role', 'mdm', 'mam', 'ca', 'loc', 'auths', 'authm']); // CA targets sit in its conditions
   const groupName = id => once('g:' + id, () => api(`/groups/${enc(id)}?$select=id,displayName`).then(g => g.displayName, () => ''));
 
@@ -267,7 +268,7 @@
     if (p.kind === 'mdm' || p.kind === 'mam') return { raw: {}, rows: L.mdmAssignmentRows(raw.policy) };
     if (p.kind === 'ca' || p.kind === 'authm') return { raw: {}, rows: L.caAssignmentRows(p.kind, raw.policy, names) };
     if (NO_ASSIGNMENTS.has(p.kind)) return { raw: {}, rows: [] };
-    const assignments = await all(`${pathOf(p)}/assignments`);
+    const assignments = L.EXPAND_ASSIGNMENTS.has(p.kind) ? (await api(`${pathOf(p)}?$expand=assignments`)).assignments || [] : await all(`${pathOf(p)}/assignments`);
     const groups = {}, filters = {};
     await pool(assignments.map(a => a.target || {}), 4, async t => {
       if (t.groupId) groups[t.groupId] = await groupName(t.groupId);
@@ -285,7 +286,11 @@
     return once('d:' + p.key, async () => {
       try {
         const c = await configOf(p);
-        const a = await assignmentsOf(p, c.raw, c.names);
+        // A failed assignments read must not lose the configuration and its files (not memoized: the next export retries).
+        const a = await assignmentsOf(p, c.raw, c.names).catch(err => {
+          memo.delete('d:' + p.key);
+          return { raw: { assignmentsError: err.message }, rows: [{ group: `${T('asBuilt.err.read')} : ${err.message}`, mode: '', filter: '' }] };
+        });
         return { ...p, settings: c.rows, assignments: a.rows, raw: { ...c.raw, ...a.raw } };
       } catch (err) {
         memo.delete('d:' + p.key);
@@ -450,7 +455,7 @@
     return L.orderItems((items || []).filter(i => (!k || i.kind === k) && (!os || L.platformsOf(i).includes(os)) && (!q || String(i.name).toLowerCase().includes(q))), checked, current);
   }
 
-  // moved: key of the row just (un)checked. The first visible row other than it stays at the same place on screen,
+  // moved: key of the row just (un)checked. The first visible row other than it⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ stays at the same place on screen,
   // so rows moving to the top never slide the list under the pointer.
   function renderList(moved) {
     if (!items) return;
@@ -485,10 +490,10 @@
       const policies = await pool(sel, 3, async p => { const d = await detail(p); progress(++done, total); status(T('asBuilt.status.reading', { done, total: sel.length })); return d; });
       const used = new Set();
       const scripts = mode !== 'copy' && ui.scripts.checked
-        ? policies.flatMap(p => L.scriptFiles(p.kind, p.raw?.policy).map(f => [L.fileName(p.name + f.suffix, f.ext, used), f.text]))
+        ? policies.flatMap(p => L.scriptFiles(p.kind, p.raw?.policy).map(f => [L.fileName(p.name + f.suffix, f.ext, used), f.text ?? f.bytes]))
         : [];
       const stampDay = new Date().toISOString().slice(0, 10);
-      // Autopilot devices: always a CSV next to the document (Excel FR: ";" and UTF-8 BOM).
+      // Autopilot⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ devices: always a CSV next to the document (Excel FR: ";" and UTF-8 BOM).
       if (mode !== 'copy') for (const p of policies) if (p.kind === 'apdev' && p.raw?.devices)
         scripts.push([L.fileName(`autopilot-devices-${stampDay}`, 'csv', used), '\ufeff' + L.autopilotCsv(p.raw.devices)]);
       const stamp = new Date().toISOString().slice(0, 10);
@@ -508,7 +513,7 @@
           await pause();
         }
       }
-      for (const [name, text] of scripts) { download(name, name.endsWith('.csv') ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8', text); await pause(); }
+      for (const [name, body] of scripts) { download(name, name.endsWith('.csv') ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8', body); await pause(); }
       progress(total, total);
       status(T('asBuilt.status.exported', { n: policies.length }) + (mode === 'copy' ? T('asBuilt.status.toClipboard') : split ? T('asBuilt.status.toFiles', { n: policies.length }) : T('asBuilt.status.toOneFile')) + (scripts.length ? T('asBuilt.status.scripts', { n: scripts.length }) : ''));
     } catch (err) {
@@ -519,8 +524,8 @@
     }
   }
 
-  function download(name, type, text) {
-    const url = URL.createObjectURL(new Blob([text], { type }));
+  function download(name, type, body) {
+    const url = URL.createObjectURL(new Blob([body], { type }));
     const a = el('a', { href: url, download: name });
     document.body.append(a);
     a.click();

@@ -11,7 +11,7 @@ Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111)
 | Fonction | Rôle en une ligne |
 |---|---|
 | **Tenant Guard** | Bandeau et cadre coloré du tenant actif, confirmation avant toute action d'écriture dans un tenant marqué PROD. |
-| **As-Built** | Bouton flottant : export des stratégies Intune en Markdown, Word (.doc) et JSON, plus les scripts (.ps1 / .sh). |
+| **As-Built** | Bouton flottant : export des stratégies Intune en Markdown, Word (.doc) et JSON, plus les scripts et profils personnalisés (.ps1, .sh, .zsh, .mobileconfig). |
 | **Setting Inspector** | Carte au survol d'un paramètre du catalogue, section détails : ID, OMA-URI / clé, licence, version OS min., GPO, liens Learn. |
 | **Settings Explainer** | Même carte, section explication (texte rédigé, page CSP Learn lue en direct, valeurs, valeur par défaut). Activable seule. |
 | **OpenIntuneBaseline** | Même carte, section OIB : valeur configurée par la baseline communautaire OpenIntuneBaseline (GPL-3.0) et stratégie concernée. Activable seule. |
@@ -229,7 +229,7 @@ Endpoints Graph (beta) appelés :
 
 | Usage | Endpoint |
 |---|---|
-| Liste Intune | `deviceManagement/configurationPolicies`, `deviceConfigurations`, `deviceCompliancePolicies`, `groupPolicyConfigurations`, `deviceManagementScripts`, `deviceShellScripts`, `deviceHealthScripts`, `windowsAutopilotDeploymentProfiles`, `deviceEnrollmentConfigurations`, `androidDeviceOwnerEnrollmentProfiles`, `intuneBrandingProfiles`, `roleDefinitions`, `roleScopeTags` ; `depOnboardingSettings` puis `depOnboardingSettings/{id}/enrollmentProfiles` ; `deviceAppManagement/mobileApps`. Appareils Autopilot : un seul élément, sans appel à la liste (l'endpoint répond 500 à `$select` / `$top`) |
+| Liste Intune | `deviceManagement/configurationPolicies`, `deviceConfigurations`, `deviceCompliancePolicies`, `groupPolicyConfigurations`, `deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts`, `windowsAutopilotDeploymentProfiles`, `deviceEnrollmentConfigurations`, `androidDeviceOwnerEnrollmentProfiles`, `intuneBrandingProfiles`, `roleDefinitions`, `roleScopeTags` ; `depOnboardingSettings` puis `depOnboardingSettings/{id}/enrollmentProfiles` ; `deviceAppManagement/mobileApps`. Appareils Autopilot : un seul élément, sans appel à la liste (l'endpoint répond 500 à `$select` / `$top`) |
 | Détail Autopilot (appareils) | `windowsAutopilotDeviceIdentities` (tous) : lignes du document + fichier `autopilot-devices-<date>.csv`. Pas de hachage matériel : Graph ne l'expose pas |
 | Détail rôle | `roleDefinitions/{id}`, `.../roleAssignments`, `roleAssignments/{id}` (membres, étendue, balises), `roleScopeTags` |
 | Détail MDM / MAM (Entra) | `policies/mobileDeviceManagementPolicies/{id}` ou `mobileAppManagementPolicies/{id}`, `?$expand=includedGroups` (portée affichée comme affectations) |
@@ -238,7 +238,7 @@ Endpoints Graph (beta) appelés :
 | Détail catalogue | `configurationPolicies/{id}`, `.../settings?$expand=settingDefinitions`, `configurationCategories/{id}` (remonte les parents) |
 | Détail ADMX | `groupPolicyConfigurations/{id}/definitionValues?$expand=definition`, `.../presentationValues?$expand=presentation` |
 | Détail autres | `{collection}/{id}` (conformité : `$expand=scheduledActionsForRule(...)`) |
-| Affectations | `{collection}/{id}/assignments`, `groups/{id}?$select=id,displayName`, `deviceManagement/assignmentFilters/{id}`. Aucune pour les appareils Autopilot, profils ADE et Android (liés à un jeton), rôles (dans le détail) et MDM (portée) |
+| Affectations | `{collection}/{id}/assignments`, `groups/{id}?$select=id,displayName`, `deviceManagement/assignmentFilters/{id}`. Scripts shell et attributs personnalisés macOS : `{collection}/{id}?$expand=assignments`, car `/assignments` répond 400 « No OData route » malgré la documentation. Un échec de lecture des affectations garde la configuration et ses fichiers : ligne d'erreur dans le document, `assignmentsError` dans le JSON. Aucune pour les appareils Autopilot, profils ADE et Android (liés à un jeton), rôles (dans le détail) et MDM (portée) |
 
 Pagination par `@odata.nextLink` (sans limite). Parallélisme borné par `pool()` (3 à 4). Cache mémoire `memo` par clé.
 
@@ -261,17 +261,17 @@ sequenceDiagram
 
 **Langue des exports.** Les textes générés par `lib.js` (types, titres et en-têtes Markdown / Word, libellés) passent par `T(key, frDefault)` : `__tenantCompassI18n.t(key)` dans la page, le défaut français inline sous Node (tests). Les exports suivent donc la langue du menu au moment du chargement de l'onglet.
 
-**Données exportées.** Valeurs secrètes masquées (`(secret masqué)`) : `SecretSettingValue` du catalogue, valeurs OMA-URI `isEncrypted`, `tokenValue` et `qrCodeContent` (Android), `deviceAccountPassword`, `productKey`. Images retirées : `largeIcon`, logos de marque, `qrCodeImage`. ESP : les applications bloquantes (`selectedMobileAppIds`) sont nommées dans les documents, le JSON garde les identifiants. JSON : `exportedAt`, `tenantId` (claim `tid`), et par stratégie `type`, `base`, `policy`, `settings` / `definitionValues`, `assignments`, `filters`, `groups`. Les scripts (`scriptContent`, `detectionScriptContent`, `remediationScriptContent`, règles PowerShell des apps Win32) sont décodés du Base64 en fichiers `.ps1` / `.sh`.
+**Données exportées.** Valeurs secrètes masquées (`(secret masqué)`) : `SecretSettingValue` du catalogue, valeurs OMA-URI `isEncrypted`, `tokenValue` et `qrCodeContent` (Android), `deviceAccountPassword`, `productKey`. Images retirées : `largeIcon`, logos de marque, `qrCodeImage`. ESP : les applications bloquantes (`selectedMobileAppIds`) sont nommées dans les documents, le JSON garde les identifiants. JSON : `exportedAt`, `tenantId` (claim `tid`), et par stratégie `type`, `base`, `policy`, `settings` / `definitionValues`, `assignments`, `filters`, `groups`. Les scripts (`scriptContent`, `detectionScriptContent`, `remediationScriptContent`, règles PowerShell des apps Win32, `preInstallScript` et `postInstallScript` des apps PKG macOS) sont décodés du Base64 en fichiers `.ps1`, `.sh` ou `.zsh` (extension du fichier d'origine, sinon shebang). Les profils personnalisés (`payload` macOS et iOS, `configurationXml`) donnent, octet pour octet, un `.mobileconfig` ou un fichier de préférences (`.plist`) ; dans les documents, une ligne renvoie au fichier. Ces fichiers ne sont pas masqués, et le JSON garde le Base64.
 
 **Stockage.** Aucun `chrome.storage`. `localStorage` du portail : `tenant-compass:pos:as-built-fab`, `tenant-compass:pos:as-built-panel` (via `shared/drag.js`).
 
-**UI.** Shadow DOM **fermé** (hôte `#as-built-host`), bouton « As-Built » en bas à gauche, panneau de 500 px : recherche, filtres type / OS, cases, mode « One Policy per file » / « Toutes dans un seul fichier », option « Exporter les scripts », boutons Markdown / Word / JSON / Copier MD, barre de progression.
+**UI.** Shadow DOM **fermé** (hôte `#as-built-host`), bouton « As-Built » en bas à gauche, panneau de 500 px : recherche, filtres type / OS, cases, mode « One Policy per file » / « Toutes dans un seul fichier », option « Exporter scripts et profils », boutons Markdown / Word / JSON / Copier MD, barre de progression.
 
 **Ordre de la liste** (`orderItems`) : la stratégie ouverte dans le portail (GUID de l'URL du blade, avec ou sans suffixe `_…`, `guidsIn`, relu chaque seconde tant que le panneau est ouvert, **non cochée**), puis les éléments cochés dans l'ordre du clic (`Set` d'insertion), puis le reste par nom. Au réordonnancement, la première ligne visible autre que celle cochée garde sa position à l'écran. L'export suit le même ordre.
 
-**`lib.js`** (`globalThis.AsBuiltLib`). `policySummary`, `platformsOf`, `categoryPath`, `settingRows`, `propertyRows`, `admxRows`, `assignmentRows`, `toMarkdown`, `toWordHtml`, `toJson`, `maskSecrets`, `jwtTid`, `scriptFiles`, `fileName`, `htmlEscape`, `mdEscapeCell`, `fmtDate`.
+**`lib.js`** (`globalThis.AsBuiltLib`). `policySummary`, `platformsOf`, `categoryPath`, `settingRows`, `propertyRows`, `admxRows`, `assignmentRows`, `toMarkdown`, `toWordHtml`, `toJson`, `maskSecrets`, `jwtTid`, `scriptFiles`, `EXPAND_ASSIGNMENTS`, `fileName`, `htmlEscape`, `mdEscapeCell`, `fmtDate`.
 
-**Tests.** `as-built/test.js` : échappements, lignes catalogue / modèles / ADMX / affectations, résumés, documents, JSON (masquage, `jwtTid`), noms de fichiers, scripts et licence des remédiations.
+**Tests.** `as-built/test.js` : échappements, lignes catalogue / modèles / ADMX / affectations, résumés, documents, JSON (masquage, `jwtTid`), noms de fichiers, scripts et licence des remédiations, scripts macOS (zsh, attributs personnalisés, PKG) et profils personnalisés.
 
 ### 4.3 Setting Inspector, Settings Explainer et OpenIntuneBaseline : une carte
 

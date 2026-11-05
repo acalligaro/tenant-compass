@@ -131,7 +131,7 @@ Tenant detection, by priority: URL (`tid=`, `tenantId=`, `ctid=`, `#@domain`), d
 |---|---|
 | ![As-Built panel: search, filters, policy list, export buttons](docs/img/readme/en/02-as-built-panneau.jpg) | ![As-Built with three policies checked](docs/img/readme/en/03-as-built-selection.jpg) |
 
-- Sources (Intune console): settings catalog, configuration profiles, compliance, ADMX, apps, PowerShell scripts, macOS shell scripts, remediations, Autopilot profiles, Autopilot devices, enrollment (Enrollment Status Page, restrictions, Windows Hello...), Apple ADE (DEP) profiles, Android Enterprise / AOSP enrollment profiles, tenant customization (branding profiles), Intune roles (RBAC, with their assignments: members, scope, tags), scope tags.
+- Sources (Intune console): settings catalog, configuration profiles, compliance, ADMX, apps, PowerShell scripts, macOS shell scripts, macOS custom attributes, remediations, Autopilot profiles, Autopilot devices, enrollment (Enrollment Status Page, restrictions, Windows Hello...), Apple ADE (DEP) profiles, Android Enterprise / AOSP enrollment profiles, tenant customization (branding profiles), Intune roles (RBAC, with their assignments: members, scope, tags), scope tags.
 - Filters: search by name, type, OS. The checkbox at the top of the list checks or clears everything shown.
 - **Open policy**: the one shown in the portal is placed at the top of the list, without being checked. Checked items then move up in the order they were checked; the list does not scroll when an item moves up.
 - **Autopilot devices**: one item for the whole inventory, also exported as CSV (`autopilot-devices-<date>.csv`, `;` separator): serial number, manufacturer, model, group tag, user, profile and enrollment state. **The hardware hash (HWID) is not included**: Graph does not return it for a registered device, so the file cannot be imported back into Autopilot.
@@ -142,7 +142,7 @@ Tenant detection, by priority: URL (`tid=`, `tenantId=`, `ctid=`, `#@domain`), d
 ![As-Built Entra on the Conditional Access page: two Conditional Access policies and the Fido2 method checked at the top of the list, then authentication strengths and methods](docs/img/readme/en/17-as-built-entra.jpg)
 
 - Export mode: **One policy per file** (default) or all policies in a single file. **Copy MD** always copies a single Markdown block.
-- **Export scripts** (checked by default): downloads next to the document, decoded from Graph's Base64 (`.ps1` / `.sh`), the scripts, remediations (detection + remediation) and the PowerShell detection / requirement scripts of Win32 apps.
+- **Export scripts and profiles** (checked by default): downloads next to the document, decoded from Graph's Base64, the scripts (`.ps1`, `.sh`, `.zsh`), macOS custom attributes, remediations (detection + remediation), the PowerShell detection / requirement scripts of Win32 apps, the pre / post-install scripts of macOS PKG apps and custom profiles (`.mobileconfig`, `.plist` preference files). These files are exact copies, not masked: a secret written in a script or profile stays in clear text.
 - `.intunewin` files cannot be exported: Graph exposes no download URL for published app content (the storage URI only exists during upload, and the content is encrypted).
 
 ## Assignment Lens
