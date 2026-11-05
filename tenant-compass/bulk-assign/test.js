@@ -60,6 +60,18 @@ assert.strictEqual(A.mergeTargets('dc', existing, groupOf('g2')).already, true);
 assert.strictEqual(A.mergeTargets('dc', existing, groupOf('g9')).already, true); // excluded group: never turned into an inclusion
 assert.strictEqual(A.mergeTargets('dc', [{ target: { '@odata.type': G + 'allUsersAssignmentTarget' } }], A.targetOf({ mode: 'allUsers' })).already, true);
 assert.strictEqual(A.mergeTargets('dc', [{ target: { '@odata.type': G + 'allDevicesAssignmentTarget' } }], A.targetOf({ mode: 'allDevices' })).already, true);
+// A group and a built-in target never go together: refused both ways, nothing to send
+const allDevices = A.targetOf({ mode: 'allDevices' }), allUsers = A.targetOf({ mode: 'allUsers' });
+for (const t of [allDevices, allUsers]) assert.deepStrictEqual(A.mergeTargets('dc', [{ target: groupOf('g2') }], t), { already: false, conflict: 'groupPresent', body: null });
+for (const type of ['allDevicesAssignmentTarget', 'allLicensedUsersAssignmentTarget', 'allUsersAssignmentTarget'])
+  assert.deepStrictEqual(A.mergeTargets('sh', [{ target: { '@odata.type': G + type } }], groupOf('g1')), { already: false, conflict: 'builtInPresent', body: null }, type);
+assert.strictEqual(A.mergeTargets('dc', [{ source: 'policySets', target: groupOf('g3') }], allDevices).conflict, 'groupPresent'); // assigned through a policy set: still assigned
+// An excluded group does not block: "All devices except this group" is a usual setup
+const withExclusion = A.mergeTargets('dc', [{ target: excluded }], allDevices);
+assert.deepStrictEqual([withExclusion.already, withExclusion.conflict, withExclusion.body.assignments.length], [false, undefined, 2]);
+// The two built-in targets can go together, and the same target stays "already there"
+assert.strictEqual(A.mergeTargets('dc', [{ target: allUsers }], allDevices).conflict, undefined);
+assert.deepStrictEqual(A.mergeTargets('dc', [{ target: groupOf('g2') }, { target: allDevices }], allDevices), { already: true, body: null });
 // Policy set assignments belong to the policy set: sending them back would turn them into direct ones
 assert.deepStrictEqual(A.mergeTargets('dc', [{ source: 'policySets', sourceId: 's', target: groupOf('g3') }], groupOf('g1')).body.assignments, [{ target: groupOf('g1') }]);
 assert.deepStrictEqual(A.newAssignment('sh', groupOf('g1')), { deviceManagementScriptAssignments: [{ target: groupOf('g1') }] });
@@ -118,6 +130,16 @@ assert.deepStrictEqual(A.groupsIn(null), []);
   f = fake({ existing: { status: 200, body: { assignments: [{ target: groupOf('g1') }] } } });
   r = await B.applyLine(item, plan, f.call);
   assert.strictEqual(r.assign.status, 'already');
+  assert.ok(!f.calls.some(c => c.op === 'assign'));
+
+  // A group already assigned refuses All devices, and the other way round: read done, nothing sent, the line says why
+  f = fake({ existing: { status: 200, body: { assignments: [{ target: groupOf('g2') }] } } });
+  r = await B.applyLine(item, { ...plan, target: allDevices }, f.call);
+  assert.deepStrictEqual([r.assign.status, r.assign.error], ['skipped', 'bulkAssign.err.groupPresent']);
+  assert.ok(!f.calls.some(c => c.op === 'assign'));
+  f = fake({ existing: { status: 200, body: { assignments: [{ target: allDevices }] } } });
+  r = await B.applyLine(item, plan, f.call);
+  assert.deepStrictEqual([r.assign.status, r.assign.error], ['skipped', 'bulkAssign.err.builtInPresent']);
   assert.ok(!f.calls.some(c => c.op === 'assign'));
 
   // A filter on a script: skipped without any call. Dropping the filter would reach more devices than asked

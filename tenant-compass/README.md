@@ -337,6 +337,7 @@ Comme As-Built, elle liste vos stratégies. Au lieu de les exporter, elle leur a
 
 - **Ajout seulement** : Graph remplace toutes les affectations d'un objet à chaque envoi. L'extension relit donc les affectations existantes et les renvoie avec la nouvelle. Si cette lecture échoue ou est incomplète, rien n'est envoyé. Aucune affectation ni aucun scope tag n'est retiré.
 - **Déjà en place** : si le groupe est déjà affecté ou exclu, ou si la même cible existe déjà, rien n'est envoyé, même avec un autre filtre. Un groupe exclu n'est jamais transformé en inclusion.
+- **Groupe ou cible intégrée, pas les deux** : si un groupe est déjà affecté, **Tous les utilisateurs** et **Tous les appareils** sont refusés, et inversement. Rien n'est envoyé et la ligne l'indique. Un groupe exclu ne bloque pas : « tous les appareils sauf ce groupe » reste possible.
 - **Ensembles de stratégies** : leurs affectations restent gérées par l'ensemble et ne sont pas renvoyées.
 - **Filtres** : Microsoft ne les prend pas en charge sur les scripts PowerShell et shell, et l'extension traite les attributs personnalisés de la même façon. Une telle ligne est ignorée et le signale, plutôt que d'être affectée sans filtre, ce qui toucherait plus d'appareils que prévu.
 - **Résultat inconnu** (erreur 5xx, coupure réseau) : vérifiez dans le portail avant de relancer. Une session expirée arrête la série : les lignes suivantes ne sont pas envoyées.

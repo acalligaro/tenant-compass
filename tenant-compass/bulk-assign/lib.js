@@ -25,6 +25,7 @@
     if (!list) return { status: 'failed', error: 'bulkAssign.err.partial' };
     const merged = A.mergeTargets(kind, list, target);
     if (merged.already) return { status: 'already' };
+    if (merged.conflict) return { status: 'skipped', error: merged.conflict === 'groupPresent' ? 'bulkAssign.err.groupPresent' : 'bulkAssign.err.builtInPresent' };
     return writeResult(await withRetry(() => call('assign', kind, { id, tid, body: merged.body }), pause));
   }
 

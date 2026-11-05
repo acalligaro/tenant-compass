@@ -34,6 +34,8 @@ __tenantCompassI18n.add({
     'bulkAssign.err.source': 'Liste illisible : {list}',
     'bulkAssign.err.partial': 'affectations existantes incomplètes, rien envoyé',
     'bulkAssign.err.noFilter': 'filtre non pris en charge par ce type, rien envoyé',
+    'bulkAssign.err.groupPresent': 'un groupe est déjà affecté, tous les utilisateurs ou tous les appareils refusé, rien envoyé',
+    'bulkAssign.err.builtInPresent': 'tous les utilisateurs ou tous les appareils déjà affecté, groupe refusé, rien envoyé',
   },
   en: {
     'bulkAssign.ui.fab': 'Bulk Assign',
@@ -68,5 +70,7 @@ __tenantCompassI18n.add({
     'bulkAssign.err.source': 'List unreadable: {list}',
     'bulkAssign.err.partial': 'existing assignments incomplete, nothing sent',
     'bulkAssign.err.noFilter': 'filter not supported by this type, nothing sent',
+    'bulkAssign.err.groupPresent': 'a group is already assigned, all users or all devices refused, nothing sent',
+    'bulkAssign.err.builtInPresent': 'all users or all devices already assigned, group refused, nothing sent',
   },
 });

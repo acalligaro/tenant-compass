@@ -335,6 +335,7 @@ Like As-Built, it lists your policies. Instead of exporting them, it adds an ass
 
 - **Adds only**: Graph replaces every assignment of an object on each call. The extension therefore reads the existing assignments and sends them back with the new one. If that read fails or is incomplete, nothing is sent. No assignment and no scope tag is removed.
 - **Already in place**: if the group is already assigned or excluded, or if the same target already exists, nothing is sent, even with another filter. An excluded group is never turned into an inclusion.
+- **Group or built-in target, not both**: if a group is already assigned, **All users** and **All devices** are refused, and the other way round. Nothing is sent and the row says so. An excluded group does not block: "all devices except this group" stays possible.
 - **Policy sets**: their assignments stay managed by the set and are not sent back.
 - **Filters**: Microsoft does not support them on PowerShell and shell scripts, and the extension treats custom attributes the same way. Such a row is skipped and says so, rather than being assigned without its filter, which would reach more devices than intended.
 - **Unknown result** (5xx error, network failure): check in the portal before running again. An expired session stops the series: the next rows are not sent.

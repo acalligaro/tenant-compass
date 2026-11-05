@@ -113,7 +113,7 @@ tenant-compass/
 ├── bulk-assign/
 │   ├── page.js                   Liste des stratégies, cible et scope tags, confirmation, série (MAIN world)
 │   ├── lib.js                    Fonctions pures : sources, traitement d'une ligne, série, règles de réessai
-│   ├── i18n.js                   Dictionnaire FR / EN (32 clés)
+│   ├── i18n.js                   Dictionnaire FR / EN (34 clés)
 │   └── test.js                   Tests Node (dont shared/assign-lib.js)
 ├── scope-cleanup/
 │   ├── page.js                   Liste des objets avec Default et leurs scope tags, confirmation, série (MAIN world)
@@ -582,7 +582,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 1. Filtre choisi sur un type sans filtre (scripts PowerShell et shell d'après Learn, attributs personnalisés par prudence) : ligne ignorée, aucun appel. L'envoyer sans son filtre toucherait plus d'appareils que prévu.
 2. Lecture de l'existant : `configurationPolicies/{id}/assignments`, ailleurs `{id}?$expand=assignments` (`/assignments` répond 400 sur les scripts shell). Lecture refusée, ou liste incomplète (`nextLink`) : **rien n'est envoyé**, car `/assign` remplace tout.
-3. `mergeTargets` : même groupe (inclus ou exclu) ou même cible intégrée déjà présente → rien n'est envoyé. Sinon, existant + nouvelle cible. Les affectations venues d'un ensemble de stratégies ne sont pas renvoyées.
+3. `mergeTargets` : même groupe (inclus ou exclu) ou même cible intégrée déjà présente → rien n'est envoyé. Un groupe inclus et une cible intégrée (tous les utilisateurs, tous les appareils) ne vont jamais ensemble : refus dans les deux sens, sans envoi, même si le groupe vient d'un ensemble de stratégies. Un groupe exclu ne bloque pas. Sinon, existant + nouvelle cible. Les affectations venues d'un ensemble de stratégies ne sont pas renvoyées.
 4. `POST {collection}/{id}/assign`, clé `assignments` ou `deviceManagementScriptAssignments` selon le type.
 5. Scope tags : lecture de la stratégie, union avec les tags choisis, `PATCH` seulement si la liste change (avec `@odata.type` pour les profils et la conformité).
 
@@ -661,7 +661,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 - `background.js` enregistre le marqueur **`ui-lang`** : `shared/lang/fr.js` ou `shared/lang/en.js` selon `lang`, `document_start`, toutes les frames, tous les `host_permissions`, monde ISOLATED. Il pose `<html data-tenant-compass-lang="fr|en">`, attribut lisible par les deux mondes (les scripts MAIN n'ont pas accès à `chrome.*`).
 - `withI18n` ajoute en tête de chaque script de fonction l'assistant puis `<fonction>/i18n.js`. **Chrome n'injecte un fichier qu'une fois par frame, quel que soit le monde** : un fichier listé par un script MAIN et par un script ISOLATED ne s'exécute que dans le premier injecté. D'où un chemin par monde pour l'assistant (`shared/i18n-page.js` en MAIN, `shared/i18n-page-isolated.js` en ISOLATED, copies identiques vérifiées par `tenant-guard/test.js`), et `i18n: false` sur les hooks MAIN sans texte, pour que `<fonction>/i18n.js` arrive dans le script ISOLATED qui affiche la carte. Aucun fichier n'est listé dans les deux mondes (vérifié par `tenant-guard/test.js`) : `change-snapshot/lib.js` n'est enregistré que pour le hook MAIN, et `content.js` le charge par `import()` (ressource web accessible). Avant cette règle, `lib.js` pouvait partir dans le monde ISOLATED et `page.js` s'arrêtait sans rien observer.
 - `shared/i18n-page.js` n'expose qu'un global, `globalThis.__tenantCompassI18n` (garde contre le double chargement, pour ne pas heurter les globaux du portail) : `lang()` (lit l'attribut à chaque appel, `fr` par défaut), `add({ fr, en })` (fusionne un dictionnaire), `t(key, vars)` (repli sur `fr` puis sur la clé, variables `{nom}`).
-- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 39, Change Snapshot 36, Policy Import 64, Bulk Assignment 32, Scope Tags Clean up 33, formulaire d'affectation 21.
+- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 39, Change Snapshot 36, Policy Import 64, Bulk Assignment 34, Scope Tags Clean up 33, formulaire d'affectation 21.
 - Les `lib.js` gardent des défauts français pour les tests Node (As-Built : `T(key, frDefault)`), à garder alignés sur le `fr` de `i18n.js`.
 - `storage.onChanged` sur `lang` relance `apply()` ; la nouvelle langue s'applique aux onglets du portail **après rechargement** (bouton `#reload-btn`). La page Journal, page d'extension, se re-rend immédiatement.
 - Ajouter une langue : un dictionnaire de plus dans `I18N` et dans chaque `<fonction>/i18n.js` (mêmes clés), un `shared/lang/<xx>.js`, la valeur dans `LANGS` (`background.js`), dans `dict` et `lang()` de `shared/i18n-page.js`, dans la liste de `journal.js`, et un bouton `data-lang` dans `popup.html`.

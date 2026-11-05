@@ -55,8 +55,14 @@
   function mergeTargets(kind, existing, target) {
     const direct = existing.filter(a => !a?.source || a.source === 'direct');
     if (existing.some(a => targetKey(a?.target) === targetKey(target))) return { already: true, body: null };
+    if (isBuiltIn(target) && existing.some(a => isGroup(a?.target))) return { already: false, conflict: 'groupPresent', body: null };
+    if (isGroup(target) && existing.some(a => isBuiltIn(a?.target))) return { already: false, conflict: 'builtInPresent', body: null };
     return { already: false, body: { [KINDS.get(kind).key]: [...direct.map(a => ({ target: a.target })), { target }] } };
   }
+
+  // A group and a built-in target never go together. An excluded group does not count: "All devices except this group" is a usual setup.
+  function isGroup(t) { return t?.['@odata.type'] === G + 'groupAssignmentTarget'; }
+  function isBuiltIn(t) { return /^#microsoft\.graph\.all(Devices|LicensedUsers|Users)AssignmentTarget$/.test(t?.['@odata.type'] || ''); }
 
   const newAssignment = (kind, target) => ({ [KINDS.get(kind).key]: [{ target }] });
 
