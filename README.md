@@ -10,7 +10,7 @@ Extension Chrome / Edge (Manifest V3), boîte à outils pour le portail Microsof
 
 | Dossier | Extension | Rôle |
 |---|---|---|
-| [`tenant-compass/`](tenant-compass/README.md) ([English](tenant-compass/README.en.md)) | **Tenant Compass** | Tenant Guard, As-Built, carte de paramètre (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Change Snapshot, Set Tenant Language et Raccourci PIM dans une seule extension, activables séparément depuis le menu, en français ou en anglais |
+| [`tenant-compass/`](tenant-compass/README.md) ([English](tenant-compass/README.en.md)) | **Tenant Compass** | Tenant Guard, As-Built, carte de paramètre (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Change Snapshot, Set Tenant Language, Raccourci PIM et Policy Import dans une seule extension, activables séparément depuis le menu, en français ou en anglais |
 
 Documentation technique de Tenant Compass : [`tenant-compass/ARCHITECTURE.md`](tenant-compass/ARCHITECTURE.md).
 
@@ -31,12 +31,14 @@ node tenant-compass/assignment-lens/test.js
 node tenant-compass/change-snapshot/test.js
 node tenant-compass/portal-language/test.js
 node tenant-compass/settings-explainer/test.js
+node tenant-compass/policy-import/test.js
 ```
 
 ## Sécurité
 
 - Le jeton d'accès du portail n'est jamais enregistré ni envoyé ailleurs qu'à `graph.microsoft.com`.
 - As-Built et Assignment Lens ne font que des lectures Graph (`GET`).
+- Policy Import, désactivée par défaut, est la seule fonction qui écrit : un `POST` de création par stratégie confirmée, sans affectation.
 - Les données Graph ne sont jamais injectées comme HTML.
 - Détails par extension dans chaque README et dans `ARCHITECTURE.md`.
 

@@ -6,7 +6,7 @@ Document destiné aux mainteneurs. Il décrit ce que fait réellement le code de
 
 ## 1. Vue d'ensemble
 
-Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111) qui ajoute sept fonctions au portail d'administration Microsoft, chacune activable séparément depuis le menu (popup) :
+Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111) qui ajoute dix fonctions au portail d'administration Microsoft, chacune activable séparément depuis le menu (popup) :
 
 | Fonction | Rôle en une ligne |
 |---|---|
@@ -19,10 +19,11 @@ Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111)
 | **Change Snapshot** | Journal local des modifications de stratégies faites dans le portail : diff avant / après, auteur, n° de ticket, export JSON / CSV. |
 | **Set Tenant Language** | Boutons « 🌐 » empilés à gauche des pastilles du menu : rechargent l'onglet de la console dans la Langue 1 ou la Langue 2 prédéfinies. |
 | **Raccourci PIM** | Boutons violets « 🔑 PIM éligible » / « 🔑 PIM actif » du menu : ouvrent PIM > Mes rôles sur le tenant détecté dans l'onglet actif. |
+| **Policy Import** | Bouton flottant, **désactivé par défaut** : crée des stratégies Intune à partir d'exports JSON As-Built, sans affectation. Seule fonction qui écrit dans le tenant. |
 
 Principes :
 
-- **Aucune inscription d'application dans le tenant.** As-Built et Assignment Lens réutilisent le jeton Graph que le portail utilise déjà (observé en mémoire). Tenant Guard, Setting Inspector, Settings Explainer, Change Snapshot, Set Tenant Language et le Raccourci PIM n'appellent jamais Graph (Change Snapshot observe seulement les appels du portail). Settings Explainer lit des pages publiques de `learn.microsoft.com` depuis le service worker (section 4.7).
+- **Aucune inscription d'application dans le tenant.** As-Built, Assignment Lens et Policy Import réutilisent le jeton Graph que le portail utilise déjà (observé en mémoire). Tenant Guard, Setting Inspector, Settings Explainer, Change Snapshot, Set Tenant Language et le Raccourci PIM n'appellent jamais Graph (Change Snapshot observe seulement les appels du portail). Settings Explainer lit des pages publiques de `learn.microsoft.com` depuis le service worker (section 4.7).
 - **Pas d'étape de build.** Le dossier se charge tel quel comme extension décompressée. Pas de bundler, pas de dépendance npm.
 - **JavaScript vanilla.** Chaque fonction sépare un `lib.js` pur (testable sous Node via `module.exports`) et un script de page qui touche au DOM et au réseau (Set Tenant Language et le Raccourci PIM n'ont pas de script de page : leur `lib.js` est chargé par le popup, et par le service worker pour PIM).
 - **Bilingue FR / EN** : le menu et les textes affichés dans le portail suivent la langue choisie dans le menu (section 5.3).
@@ -98,6 +99,11 @@ tenant-compass/
 │   ├── journal.html / journal.js Page Journal : filtres, détail, export JSON / CSV, vidage
 │   ├── README.md                 Fonctionnement détaillé, sécurité, limites, endpoints couverts
 │   └── test.js                   Tests Node
+├── policy-import/
+│   ├── page.js                   Jeton observé, relais `names` / `post`, panneau, aperçu, confirmation, unique POST de l'extension (MAIN world)
+│   ├── lib.js                    Fonctions pures : lecture d'un export As-Built, corps de requête, blocages, table des types, jeton, exécution
+│   ├── i18n.js                   Dictionnaire FR / EN (53 clés)
+│   └── test.js                   Tests Node
 ├── portal-language/
 │   ├── lib.js                    Set Tenant Language : LANGUAGES (24), FORMATS (30), isPortal(), portalUrl() (chargé par le popup)
 │   └── test.js                   Tests Node
@@ -129,6 +135,7 @@ flowchart TD
     SE1["settings-explainer page-hook.js MAIN<br/>+ content.js ISOLATED<br/>(remplace Setting Inspector si actif)"]
     AL1["assignment-lens/page.js + drag.js<br/>MAIN, document_start<br/>panneau (intune uniquement)"]
     CS1["change-snapshot page.js MAIN<br/>+ content.js ISOLATED<br/>cache avant, diff, dialogue"]
+    PI1["policy-import/page.js + drag.js<br/>MAIN, document_start, désactivé par défaut<br/>panneau, aperçu, confirmation"]
   end
 
   subgraph IFR["Iframes *.portal.azure.net"]
@@ -138,12 +145,14 @@ flowchart TD
     SE2["settings-explainer<br/>hook + carte"]
     AL2["assignment-lens/page.js<br/>jeton observé + requêtes GET"]
     CS2["change-snapshot<br/>observation + validation"]
+    PI2["policy-import/page.js<br/>jeton observé + relais names / post"]
   end
 
   REG --> TOP
   REG --> IFR
 
   AB1 <-->|"postMessage ping / get / res"| AB2
+  PI1 <-->|"postMessage ping / names / post / res"| PI2
   AL2 -->|"postMessage result (sans jeton)"| AL1
   AL1 -->|"postMessage refresh"| AL2
   TG1 -->|"runtime message state"| BG
@@ -157,6 +166,8 @@ flowchart TD
   AB2 -->|"GET avec jeton observé"| G
   AL2 -->|"GET avec jeton observé"| G
   AL1 -.->|"GET si jeton capté via MessagePort"| G
+  PI2 -->|"GET des noms, POST de création"| G
+  PI1 -.->|"idem si jeton capté via MessagePort"| G
   SI2 -.->|"observe les réponses du portail, aucun appel"| G
   SE2 -.->|"observe les réponses du portail, aucun appel"| G
   SE1 -->|"runtime message learn (page, ancre, OMA-URI)"| BG
@@ -486,6 +497,46 @@ Les paramètres `l=` et `mkt=` sont des comportements **observés**, **non docum
 
 **Tests.** `settings-explainer/test.js` : ceux de Setting Inspector, `slim()` étendu, `explain()` (fusion des trois niveaux), analyse d'une page Learn, `learnTarget`, `learnUrl` (refus de toute autre URL), `learnGpo`, cohérence de `explain.json` (ID connus, deux langues, sources Learn).
 
+### 4.8 Policy Import
+
+**Rôle.** Créer des stratégies Intune à partir d'exports JSON As-Built, depuis un panneau du portail. **Seule fonction qui écrit dans le tenant, donc désactivée par défaut.** Les appels passent par Graph avec la session du portail : la fonction évite l'inscription d'application, PowerShell et Graph Explorer, pas Graph.
+
+**Scripts.**
+
+| ID | Fichiers | Monde | Quand | Frames | Matches |
+|---|---|---|---|---|---|
+| `policy-import` | `shared/drag.js`, `policy-import/lib.js`, `policy-import/page.js` | MAIN | `document_start` | Toutes | `intune.microsoft.com`, `endpoint.microsoft.com`, `*.portal.azure.net` |
+
+**Flux.**
+
+1. Toutes les frames : `window.fetch`, `XMLHttpRequest` et, en frame top, `MessagePort` / `Worker` sont observés. Un jeton est gardé en mémoire **par type importable**, selon son droit d'écriture.
+2. Ouverture du panneau : `ping` sans donnée vers toutes les frames. Une frame qui détient un jeton répond `pong` avec ses types et le `tid`, jamais le jeton.
+3. Fichiers choisis : `parseFile` lit la forme As-Built (`{ tenantId, policies: [{ type, policy, settings, assignments, error }] }`), `prepare` construit le corps et les blocages. `relay('names', type)` lit les noms existants de chaque type présent, puis `markDuplicates` marque les doublons.
+4. **Importer (n)** ouvre un dialogue : annuaire, `tid`, nombre d'objets, nombre de scripts, absence d'affectation. Le bouton reste inactif tant que le nom de l'annuaire n'est pas saisi (`confirmWord`, début du `tid` si le nom est absent), quel que soit le classement du tenant dans Tenant Guard : un tenant non référencé peut être de la production.
+5. `runImport` envoie un `POST` à la fois, avec 250 ms de pause. `createPolicy` refuse d'envoyer si le jeton n'appartient plus au `tid` confirmé.
+
+**Endpoints.** `POST` et `GET ?$select=id,<nom>` sur `deviceManagement/` : `configurationPolicies`, `deviceConfigurations`, `deviceCompliancePolicies` (`DeviceManagementConfiguration.ReadWrite.All`) ; `deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts` (`DeviceManagementScripts.ReadWrite.All`). L'URL vient de la table `KINDS`, jamais du fichier ni d'un message. Pas de `PATCH`, `PUT`, `DELETE`, `$batch` ni d'affectation (vérifié par `test.js`).
+
+**Corps de requête.**
+
+- Catalogue : liste blanche `name`, `description`, `platforms`, `technologies`, `roleScopeTagIds`, `templateReference`, `settings` ; chaque paramètre garde seulement `settingInstance`.
+- Autres types : retrait des champs serveur (`id`, dates, `version`, `isAssigned`, `assignments`, `supportsScopeTags`, `highestAvailableVersion`, `isGlobalScript`, `settingCount`). Scripts : `@odata.type` fixé par le type, jamais repris du fichier.
+- Partout : retrait de `__proto__`, `constructor`, `prototype` et de toute annotation `@odata.` sauf `@odata.type`. Les contenus base64 restent identiques à l'octet.
+- Autre tenant, ou export sans `tenantId` : `roleScopeTagIds` à `['0']`.
+- Conformité : `ruleName` nul remplacé par `PasswordRequired`, `id` retirés. Autre tenant : seule l'action `block` reste, car les modèles de notification appartiennent à la source. Sans action `block`, une est ajoutée (exigée par Microsoft).
+
+**Blocages** (`body` nul, jamais envoyé) : export en erreur, type hors table, nom absent, catalogue sans paramètre, script sans contenu, `@odata.type` invalide, secret absent de l'export (masque As-Built, `isEncrypted`, `secretReferenceValueId`, `SecretSettingValue`, clé Wi-Fi nulle en WPA personnel ou WEP), profil lié à un profil de certificat (`CERT_LINKED`, d'après les propriétés de navigation des métadonnées Graph), jeton sans le droit du type, noms existants illisibles.
+
+**Réessais.** Seul `429` est réessayé (2 fois, `Retry-After` ou 10 s). `401` arrête la série. Après un `5xx`, une coupure réseau ou le délai de 60 s du relais, le statut est `unknown` : l'objet existe peut-être, la ligne n'est plus proposée.
+
+**Journal.** Les appels passent par `window.fetch` lu au moment de l'appel : Change Snapshot les observe. L'option `tenantCompassSilent` de `fetch` (ignorée par le navigateur) lui demande de journaliser sans ouvrir de carte de ticket, pour éviter une carte par objet.
+
+**Stockage.** Aucun : jeton et fichiers restent en mémoire. Positions : `policy-import-fab`, `policy-import-panel`.
+
+**UI.** Hôte `#policy-import`, Shadow DOM fermé. Le garde-clic de Tenant Guard ne voit pas ces boutons, et `policy-import` n'est volontairement pas dans `OWN_UI` : le dialogue saisi fait office de garde.
+
+**Tests.** `policy-import/test.js` : lecture, corps, blocages, table fermée, droits par type, doublons, confirmation, règles de réessai, clés i18n, `policyImport: false` dans les deux `DEFAULTS`, contrôles statiques de `page.js` (un seul `POST`, aucune fuite, aucune affectation).
+
 ---
 
 ## 5. Menu, activation des fonctions et langues
@@ -502,8 +553,8 @@ Les paramètres `l=` et `mkt=` sont des comportements **observés**, **non docum
 
 ### 5.2 Activation
 
-- Clé `chrome.storage.sync` **`features`** : `{ tenantGuard, asBuilt, settingInspector, settingsExplainer, oibRecommendations, assignmentLens, changeSnapshot, portalLanguage, pim }`, booléens (`portalLanguage` et `pim` : menu seulement, sans content script). Les trois modules de la carte de paramètre sont indépendants : la carte est enregistrée dès que l'un d'eux est actif (section 4.3).
-- Défauts : **tout à `true`**. L'objet `DEFAULTS` est dupliqué dans `background.js` et `popup.js` (commentaire « keep in sync »). Les valeurs stockées sont fusionnées sur les défauts, donc une nouvelle fonction est active par défaut chez les utilisateurs existants.
+- Clé `chrome.storage.sync` **`features`** : `{ tenantGuard, asBuilt, settingInspector, settingsExplainer, oibRecommendations, assignmentLens, changeSnapshot, portalLanguage, pim, policyImport }`, booléens (`portalLanguage` et `pim` : menu seulement, sans content script). Les trois modules de la carte de paramètre sont indépendants : la carte est enregistrée dès que l'un d'eux est actif (section 4.3).
+- Défauts : **tout à `true`, sauf `policyImport`**, qui écrit dans le tenant et reste un choix explicite. L'objet `DEFAULTS` est dupliqué dans `background.js` et `popup.js` (commentaire « keep in sync »). Les valeurs stockées sont fusionnées sur les défauts, donc une nouvelle fonction prend sa valeur par défaut chez les utilisateurs existants.
 - `popup.js` : chaque case générée écrit `features`, affiche le bouton de rechargement et redessine le menu.
 - `background.js` `apply()` : lit `features` et `lang`, **désenregistre tous** les scripts enregistrés, puis enregistre le marqueur `ui-lang` et ceux des fonctions actives (`SCRIPTS[clé]`, passés par `withI18n`). Une fonction sans entrée `SCRIPTS` (Set Tenant Language) n'enregistre rien. Si Tenant Guard est désactivé, le badge est vidé.
 - Déclencheurs : `runtime.onInstalled`, `runtime.onStartup`, `storage.onChanged` (zone `sync`, clé `features` ou `lang`).
@@ -523,7 +574,7 @@ Les paramètres `l=` et `mkt=` sont des comportements **observés**, **non docum
 - `background.js` enregistre le marqueur **`ui-lang`** : `shared/lang/fr.js` ou `shared/lang/en.js` selon `lang`, `document_start`, toutes les frames, tous les `host_permissions`, monde ISOLATED. Il pose `<html data-tenant-compass-lang="fr|en">`, attribut lisible par les deux mondes (les scripts MAIN n'ont pas accès à `chrome.*`).
 - `withI18n` ajoute en tête de chaque script de fonction l'assistant puis `<fonction>/i18n.js`. **Chrome n'injecte un fichier qu'une fois par frame, quel que soit le monde** : un fichier listé par un script MAIN et par un script ISOLATED ne s'exécute que dans le premier injecté. D'où un chemin par monde pour l'assistant (`shared/i18n-page.js` en MAIN, `shared/i18n-page-isolated.js` en ISOLATED, copies identiques vérifiées par `tenant-guard/test.js`), et `i18n: false` sur les hooks MAIN sans texte, pour que `<fonction>/i18n.js` arrive dans le script ISOLATED qui affiche la carte. Aucun fichier n'est listé dans les deux mondes (vérifié par `tenant-guard/test.js`) : `change-snapshot/lib.js` n'est enregistré que pour le hook MAIN, et `content.js` le charge par `import()` (ressource web accessible). Avant cette règle, `lib.js` pouvait partir dans le monde ISOLATED et `page.js` s'arrêtait sans rien observer.
 - `shared/i18n-page.js` n'expose qu'un global, `globalThis.__tenantCompassI18n` (garde contre le double chargement, pour ne pas heurter les globaux du portail) : `lang()` (lit l'attribut à chaque appel, `fr` par défaut), `add({ fr, en })` (fusionne un dictionnaire), `t(key, vars)` (repli sur `fr` puis sur la clé, variables `{nom}`).
-- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 39, Change Snapshot 36.
+- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 39, Change Snapshot 36, Policy Import 53.
 - Les `lib.js` gardent des défauts français pour les tests Node (As-Built : `T(key, frDefault)`), à garder alignés sur le `fr` de `i18n.js`.
 - `storage.onChanged` sur `lang` relance `apply()` ; la nouvelle langue s'applique aux onglets du portail **après rechargement** (bouton `#reload-btn`). La page Journal, page d'extension, se re-rend immédiatement.
 - Ajouter une langue : un dictionnaire de plus dans `I18N` et dans chaque `<fonction>/i18n.js` (mêmes clés), un `shared/lang/<xx>.js`, la valeur dans `LANGS` (`background.js`), dans `dict` et `lang()` de `shared/i18n-page.js`, dans la liste de `journal.js`, et un bouton `data-lang` dans `popup.html`.
@@ -558,6 +609,8 @@ Toutes les UI injectées vivent dans un Shadow DOM (`:host { all: initial; color
 | Panneau As-Built | `left: 20px; bottom: 124px`, largeur 500 px, hauteur max 76vh |
 | Bouton Assignment Lens | `left: 20px; bottom: 72px` (au-dessus du bouton As-Built) |
 | Panneau Assignment Lens | `left: 20px; bottom: 72px`, largeur 380 px, hauteur max 60vh |
+| Bouton Policy Import | `left: 120px; bottom: 20px` (à droite du bouton As-Built, hors de portée des panneaux ouverts) |
+| Panneau Policy Import | `left: 20px; bottom: 124px`, largeur 500 px, hauteur max 76vh |
 | Dialogue Change Snapshot | `right: 20px; bottom: 20px`, largeur 520 px, fixe (pas de `drag.js`, non concerné par « Positions par défaut ») |
 
 **Bouton « Positions par défaut »** (popup) : `chrome.scripting.executeScript` dans le frame top de l'onglet actif supprime toutes les clés `tenant-compass:pos:*`, puis recharge l'onglet. Échec (onglet hors portail) → message « Ouvrez d'abord l'onglet du portail Intune. »
@@ -578,6 +631,7 @@ Toutes les UI injectées vivent dans un Shadow DOM (`:host { all: initial; color
 | Change Snapshot | Oui, en-tête `Authorization` des écritures observées (page et workers `blob:`), décodé localement sans vérification de signature | Métadonnées de la requête en cours, le temps de la décoder | Jamais : seuls les claims `upn` et `tid` sortent du monde MAIN (rien pour un GET) | Aucun |
 | Set Tenant Language | Non | — | — | Aucun (seulement `chrome.tabs.update` de l'onglet actif) |
 | Raccourci PIM | Non | — | — | Aucun (`chrome.tabs.create` vers `portal.azure.com`, puis un clic d'onglet dans cette page) |
+| Policy Import | Oui, en-tête `Authorization` ou JWT vu dans un `postMessage` du shell ; gardé seulement si le droit d'écriture du type y figure | Variable de closure, par frame et par type | Jamais : seuls les types et le `tid` passent dans `pong` | Après confirmation saisie : `POST` de création vers une liste fermée de collections, `GET` des noms (nextLink vérifié). **Seule écriture de l'extension.** |
 
 Le jeton n'est jamais écrit dans `chrome.storage`, `localStorage`, la console, ni envoyé au service worker. Change Snapshot écrit seulement `upn` et `tid` dans ses entrées de journal. Les appels utilisent `credentials: 'omit'`. Comme le code tourne en MAIN world, il partage le contexte JavaScript du portail : la protection repose sur la portée de closure, pas sur une isolation du navigateur.
 
@@ -588,6 +642,9 @@ Le jeton n'est jamais écrit dans `chrome.storage`, `localStorage`, la console, 
 | As-Built, iframe reçoit `ping` / `get` | `e.source === window.top` et `e.origin` ∈ origines UI ; réponse ciblée sur `e.origin` |
 | As-Built, top reçoit `pong` / `res` | `e.origin` correspond à `WORKER_ORIGIN` ; `res` accepté seulement depuis le worker choisi et pour un `id` en attente |
 | As-Built, `ping` émis | cible `'*'`, mais le message ne contient aucune donnée |
+| Policy Import, iframe reçoit `ping` / `names` / `post` | `e.source === window.top` et `e.origin` ∈ origines Intune ; `kind` validé par la table fermée, le message ne porte jamais d'URL ; `post` refusé si le `tid` du jeton diffère ; réponse ciblée sur `e.origin` |
+| Policy Import, top reçoit `pong` / `res` | `e.origin` correspond à `FRAME_ORIGIN` ; `res` accepté seulement depuis la frame interrogée et pour un `id` en attente |
+| Policy Import, `ping` émis | cible `'*'`, mais le message ne contient aucune donnée |
 | Setting Inspector, hook → content | émis vers `location.origin`, reçu si `e.source === window` |
 | Assignment Lens, `result` | émis vers `https://intune.microsoft.com` ; reçu si origine intune ou `*.portal.azure.net` |
 | Assignment Lens, `refresh` | émis vers `'*'` sans donnée ; reçu si `e.source === window.top` et `e.origin === TOP` |
@@ -618,7 +675,7 @@ Pas de permission `tabs` ni `activeTab` : `tabs.query`, `tabs.reload`, `tabs.upd
 
 | Zone | Clé | Propriétaire | Forme |
 |---|---|---|---|
-| `chrome.storage.sync` | `features` | `popup.js` (écrit), `background.js` (lit) | `{ tenantGuard: bool, asBuilt: bool, settingInspector: bool, settingsExplainer: bool, oibRecommendations: bool, assignmentLens: bool, changeSnapshot: bool, portalLanguage: bool }` |
+| `chrome.storage.sync` | `features` | `popup.js` (écrit), `background.js` (lit) | `{ tenantGuard: bool, asBuilt: bool, settingInspector: bool, settingsExplainer: bool, oibRecommendations: bool, assignmentLens: bool, changeSnapshot: bool, portalLanguage: bool, pim: bool, policyImport: bool }` |
 | `chrome.storage.sync` | `lang` | `shared/i18n.js` (`setLang` écrit, `i18nReady` lit) ; lu aussi par `background.js` (marqueur `ui-lang`) et `journal.js` | `'fr'` ou `'en'` ; absent → langue du navigateur |
 | `chrome.storage.sync` | `portalLangs` | Set Tenant Language (`popup.js`) | `[{ lang, format }, { lang, format }]`, codes de `LANGUAGES` / `FORMATS` ; défaut français puis anglais (l'ancienne clé `portalLang` devient la Langue 2) |
 | `chrome.storage.sync` | `rules` | Tenant Guard (`options.js` écrit, `content.js` lit) | `[{ match: string, label: string, color: '#rrggbb', prod: bool }]` |
@@ -632,6 +689,7 @@ Pas de permission `tabs` ni `activeTab` : `tabs.query`, `tabs.reload`, `tabs.upd
 | `localStorage` (portail) | `tenant-compass:pos:as-built-panel` | idem | `{ x, y }` |
 | `localStorage` (portail) | `tenant-compass:pos:assignment-lens-fab` | `shared/drag.js` pour Assignment Lens | `{ x, y }` |
 | `localStorage` (portail) | `tenant-compass:pos:assignment-lens-panel` | idem | `{ x, y }` |
+| `localStorage` (portail) | `tenant-compass:pos:policy-import-fab`, `tenant-compass:pos:policy-import-panel` | `shared/drag.js` pour Policy Import | `{ x, y }` |
 | `sessionStorage` (popup) | `langChanged` | `popup.js` | `'1'` posé avant le rechargement du popup sur changement de langue, supprimé à la lecture (affiche `#reload-btn`) |
 | DOM (portail) | `<html data-tenant-compass-lang>` | `shared/lang/<xx>.js` (écrit), `shared/i18n-page.js` (lit) | `'fr'` ou `'en'` |
 | `sessionStorage` (portail) | — | Aucune écriture. Tenant Guard lit seulement les noms de clés (avec ceux du `localStorage`) | — |
@@ -676,13 +734,18 @@ Tirées des commentaires `ponytail:` et du `README.md`.
 | `popup.js` (Set Tenant Language) | L'onglet est rechargé : modifications non enregistrées perdues | — |
 | `shared/drag.js` | Position bornée au chargement et à chaque changement de taille de l'élément (`ResizeObserver`), pas au redimensionnement de la fenêtre | Écouter `resize` si besoin |
 | `README.md` | Le `.intunewin` n'est pas exportable (aucune URL Graph de téléchargement) | — |
+| `policy-import/lib.js` | Seul le format d'export As-Built est lu : ni export natif du catalogue, ni fichiers OpenIntuneBaseline | Ajouter une détection de forme et l'UTF-16 si le besoin apparaît |
+| `policy-import/lib.js` | Secrets rendus nuls par Graph : seule la clé Wi-Fi est détectée. Liens facultatifs perdus sans blocage : certificat PKINIT de l'extension SSO, `privacyAccessControls` Windows | Étendre `hasSecret` et `CERT_LINKED` si un type est signalé |
+| `policy-import` | Hors V1 : ADMX (création en deux temps), applications, inscription, rôles, balises, affectations, mise à jour d'un objet existant, saisie des secrets | Au cas par cas |
+| `policy-import/page.js` | Pas de bouton d'arrêt pendant une série ; recharger la page l'interrompt, les doublons sont signalés au prochain import | Ajouter un arrêt si les séries longues gênent |
+| `policy-import` + `change-snapshot` | Journal sans ticket : le numéro se saisit après coup, entrée par entrée | Un ticket unique dans le dialogue d'import |
 
 Autres constats à la lecture du code :
 
 - `change-snapshot/README.md` décrit encore l'extension autonome (installation du dossier `change-snapshot/`, `manifest.json` propre, « aucune permission d'hôte », journal ouvert par clic sur l'icône) : dans Tenant Compass, le journal s'ouvre depuis le menu et l'extension a des `host_permissions`. Les sections fonctionnement, sécurité et limites restent valables.
 - Assignment Lens ne fonctionne pas sur `endpoint.microsoft.com` (`TOP` fixé à `intune.microsoft.com`, absent des `matches`).
 - `data/settings.json` ne contient qu'une graine de 12 paramètres ; la couverture réelle dépend des définitions capturées dans `explainerLive`.
-- As-Built, Assignment Lens, Setting Inspector (ou Settings Explainer) et Change Snapshot enveloppent chacun `window.fetch` / `XMLHttpRequest` dans la même frame (Change Snapshot enveloppe aussi `Worker`). L'ordre d'enveloppement entre scripts enregistrés séparément n'est pas garanti par le code (**à vérifier**) ; chaque wrapper rappelle l'original et ne modifie pas la requête, donc l'ordre ne devrait pas changer le comportement.
+- As-Built, Assignment Lens, Policy Import, Setting Inspector (ou Settings Explainer) et Change Snapshot enveloppent chacun `window.fetch` / `XMLHttpRequest` dans la même frame (Change Snapshot enveloppe aussi `Worker`). L'ordre d'enveloppement entre scripts enregistrés séparément n'est pas garanti par le code (**à vérifier**) ; chaque wrapper rappelle l'original et ne modifie pas la requête, donc l'ordre ne devrait pas changer le comportement.
 
 ---
 
@@ -700,7 +763,7 @@ Autres constats à la lecture du code :
 4. **`shared/i18n.js`** : ajouter `f.<clé>` (nom) et `f.<clé>.desc` (description, infobulle et paramètres) **dans `fr` et dans `en`** (textes dans la page : `<ma-fonction>/i18n.js`, étape 1). Facultatif : une entrée `ACTIONS[<clé>]` dans `popup.js` pour un bouton d'action rapide dans la vue principale (ex. « Journal » de Change Snapshot), avec ses propres clés `menu.*`.
 5. **Manifeste** : ajouter les `host_permissions` ou `web_accessible_resources` manquants, mettre à jour la `description` et incrémenter `version`.
 6. **UI** : Shadow DOM, textes traduits (`__tenantCompassI18n.t`), jetons de style de la section 6, `window.__tenantCompassDrag(el, handle, 'ma-fonction-…')` pour la position (préfixe `tenant-compass:pos:` automatique, couvert par « Positions par défaut »). Texte via `textContent` uniquement.
-7. **Sécurité** : si Graph est appelé, GET seulement, URL vérifiée, `credentials: 'omit'`, jeton jamais persisté ni posté ; tout `postMessage` ciblé sur une origine explicite et vérifié à la réception (`e.source` + `e.origin`).
+7. **Sécurité** : si Graph est appelé, GET seulement (seule exception : le `POST` de création de `policy-import`, désactivé par défaut), URL vérifiée, `credentials: 'omit'`, jeton jamais persisté ni posté ; tout `postMessage` ciblé sur une origine explicite et vérifié à la réception (`e.source` + `e.origin`).
 8. **README.md** : section de la fonction, ligne dans « Fonctionnement » et commande de test dans « Tests ».
 9. **Ce document** : arborescence, schéma, section fonction, tableau de stockage, sécurité, limites.
 10. **Vérifier** : `node test.js` dans chaque dossier, rechargement de l'extension, rechargement de l'onglet du portail, essai activée puis désactivée.

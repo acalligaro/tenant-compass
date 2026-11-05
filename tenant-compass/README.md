@@ -2,7 +2,7 @@
 
 *Boîte à outils pour le portail Microsoft Intune.* · [English version](README.en.md)
 
-Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language et Raccourci PIM réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
+Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, Raccourci PIM et Policy Import réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
 
 Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -27,6 +27,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 - [Change Snapshot](#change-snapshot)
 - [Set Tenant Language](#set-tenant-language)
 - [Raccourci PIM](#raccourci-pim)
+- [Policy Import](#policy-import)
 - [Déplacement](#déplacement)
 - [Fonctionnement](#fonctionnement)
 - [Limites](#limites)
@@ -45,6 +46,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Change Snapshot | Journal local des modifications : différence avant / après, auteur, n° de ticket, export JSON / CSV | Fenêtre en bas à droite après un enregistrement ; journal depuis le menu |
 | Set Tenant Language | Bascule la console entre deux langues prédéfinies, en 1 clic | Boutons 🌐 du menu ; Intune, Azure, Entra, Defender, Purview |
 | Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives) sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible et 🔑 PIM actif du menu |
+| Policy Import | Crée des stratégies à partir d'exports JSON As-Built, sans affectation. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, à droite d'As-Built (Intune) |
 
 ## Installation
 
@@ -60,6 +62,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Fonction | Échange réseau | Contenu |
 |---|---|---|
 | As-Built, Assignment Lens | Lectures (`GET`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies, applications et groupes affichés, comme le fait le portail |
+| Policy Import, si vous l'activez | Lecture des noms existants (`GET`) et création (`POST`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies des fichiers que vous choisissez et confirmez, sans affectation |
 | Settings Explainer | Lecture sans cookie de pages publiques `learn.microsoft.com/…/windows/client-management/mdm/` | Aucune donnée du tenant : seulement le nom de la page de documentation demandée |
 | Tenant Guard, Setting Inspector, OpenIntuneBaseline, Change Snapshot, Set Tenant Language, Raccourci PIM | Aucun | Ils observent la page et les réponses que le portail reçoit déjà |
 
@@ -283,15 +286,43 @@ Si Tenant Guard a détecté le tenant de l'onglet actif (ID de tenant ou domaine
 - Adresse : `https://portal.azure.com/#@<tenant>/view/Microsoft_Azure_PIMCommon/ActivationMenuBlade/~/aadmigratedroles`. Testé le 2026-10-04 (les deux boutons) ; comportement observé du portail, non documenté sur Microsoft Learn.
 - Code : `pim/lib.js` (testé : `node pim/test.js`), sélection de l'onglet actif dans `background.js`.
 
+## Policy Import
+
+**Désactivée par défaut : c'est la seule fonction qui écrit dans le tenant.** Activez-la dans ⚙, puis rechargez l'onglet du portail.
+
+Elle crée des stratégies Intune à partir des exports JSON d'As-Built, sans PowerShell, sans application à inscrire et sans Graph Explorer. Les appels passent bien par Microsoft Graph, avec la session du portail.
+
+1. Cliquer sur **Import**, à droite du bouton As-Built, puis choisir un ou plusieurs fichiers `.json`.
+2. Vérifier l'aperçu : chaque ligne indique le type, les avertissements et ce qui la bloque. Rien n'est écrit à cette étape.
+3. Cliquer sur **Importer (n)**, puis saisir le nom de l'annuaire affiché pour confirmer, quel que soit le tenant.
+
+**Pris en charge** : catalogue de paramètres, profils de configuration (dont les profils personnalisés `.mobileconfig` et `.plist`), conformité, scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, remédiations. Les autres types d'un export (applications, ADMX, inscription, rôles…) sont signalés et ignorés.
+
+- **Aucune affectation** : une stratégie créée n'a d'effet sur aucun appareil tant que vous ne l'affectez pas.
+- **Création seulement** : un `POST` par stratégie, vers une liste fermée de collections. Rien n'est modifié ni supprimé. Pour annuler, supprimez l'objet dans le portail : son ID s'affiche sur la ligne.
+- **Secrets** : une stratégie dont un secret est absent de l'export (valeur masquée ou chiffrée, clé Wi-Fi) est bloquée, à créer dans le portail.
+- **Certificats** : un profil lié à un profil de certificat (SCEP, Wi-Fi Enterprise, VPN, réseau filaire…) est bloqué, car ce lien n'est pas dans l'export. Les liens facultatifs ne bloquent pas et sont perdus : certificat PKINIT de l'extension SSO, `privacyAccessControls` Windows.
+- **Autre tenant** : les balises d'étendue reviennent à Default, et la conformité ne garde que l'action de blocage, avec son délai de grâce.
+- **Doublons** : un nom déjà présent dans le tenant est décoché. Si les noms ne peuvent pas être lus, le type est bloqué.
+- **Résultat inconnu** (erreur 5xx, coupure réseau) : l'objet existe peut-être, il n'y a donc pas de nouvel essai. Vérifiez dans le portail avant de relancer.
+- **Droits** : le jeton du portail doit porter `DeviceManagementConfiguration.ReadWrite.All` (profils, catalogue, conformité) et `DeviceManagementScripts.ReadWrite.All` (scripts). Votre rôle Intune doit aussi être actif (PIM).
+- **Journal** : Change Snapshot journalise chaque création, sans carte de ticket par objet.
+
+> **N'importez que des fichiers de confiance.** Les scripts et profils d'un fichier sont copiés tels quels : un script peut s'exécuter sur les appareils dès que vous l'affectez. Les exports As-Built peuvent aussi contenir des jetons en clair dans un profil personnalisé (par exemple un jeton d'inscription d'agent).
+
+Graph valide chaque objet à la création : un type de profil rare peut être refusé, et son message s'affiche alors sur la ligne.
+
+- Code : `policy-import/lib.js` (testé : `node policy-import/test.js`), `policy-import/page.js`.
+
 ## Déplacement
 
-As-Built et Assignment Lens ne s'ouvrent pas en même temps : ouvrir l'un réduit l'autre en bouton.
+As-Built, Assignment Lens et Policy Import ne s'ouvrent pas en même temps : ouvrir l'un referme les autres.
 
 Les boutons et panneaux d'As-Built et d'Assignment Lens se déplacent à la souris (bouton : glisser ; panneau : glisser l'en-tête). Position mémorisée par élément dans le `localStorage` du portail (clés `tenant-compass:pos:*`), code commun dans `shared/drag.js`. Bouton **Positions par défaut** dans le menu : efface ces clés dans l'onglet actif et le recharge.
 
 ## Fonctionnement
 
-`background.js` enregistre dynamiquement (`chrome.scripting.registerContentScripts`) les scripts des fonctions cochées, d'après `chrome.storage.sync` clé `features` (toutes actives par défaut). Chaque fonction vit dans son dossier (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), avec un `lib.js` testable sous Node et un `test.js`. Le style commun (dégradé #0078d4 → #5b5fc7) et le déplacement (`shared/drag.js`) sont partagés. Détails : [ARCHITECTURE.md](ARCHITECTURE.md).
+`background.js` enregistre dynamiquement (`chrome.scripting.registerContentScripts`) les scripts des fonctions cochées, d'après `chrome.storage.sync` clé `features` (toutes actives par défaut, sauf Policy Import). Chaque fonction vit dans son dossier (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), avec un `lib.js` testable sous Node et un `test.js`. Le style commun (dégradé #0078d4 → #5b5fc7) et le déplacement (`shared/drag.js`) sont partagés. Détails : [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Limites
 
@@ -312,6 +343,7 @@ cd ../settings-explainer && node test.js
 cd ../assignment-lens && node test.js
 cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
+cd ../policy-import && node test.js
 ```
 
 ## Licence

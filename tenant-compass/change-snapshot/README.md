@@ -72,7 +72,7 @@ Réglages (`chrome.storage.sync`, clé `snapshot`) : `promptProd` (défaut `true
 Hôte `https://graph.microsoft.com/(beta|v1.0)/`, collections :
 
 - `deviceManagement/` : `configurationPolicies`, `compliancePolicies`, `deviceConfigurations`, `deviceCompliancePolicies`,
-  `groupPolicyConfigurations`, `intents`, `deviceManagementScripts`, `deviceHealthScripts`, `deviceShellScripts`,
+  `groupPolicyConfigurations`, `intents`, `deviceManagementScripts`, `deviceHealthScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`,
   `windowsFeatureUpdateProfiles`, `windowsQualityUpdateProfiles`, `windowsDriverUpdateProfiles`,
   `deviceEnrollmentConfigurations`, `windowsAutopilotDeploymentProfiles`, `assignmentFilters`
 - `deviceAppManagement/` : `iosManagedAppProtections`, `androidManagedAppProtections`, `windowsManagedAppProtections`,

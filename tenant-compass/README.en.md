@@ -2,7 +2,7 @@
 
 *A toolbox for the Microsoft Intune admin center.* · [Version française](README.md)
 
-Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language and PIM shortcut in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
+Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, PIM shortcut and Policy Import in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
 
 Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -27,6 +27,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 - [Change Snapshot](#change-snapshot)
 - [Set Tenant Language](#set-tenant-language)
 - [PIM shortcut](#pim-shortcut)
+- [Policy Import](#policy-import)
 - [Moving panels](#moving-panels)
 - [How it works](#how-it-works)
 - [Limitations](#limitations)
@@ -45,6 +46,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Change Snapshot | Local change log: before / after diff, author, ticket number, JSON / CSV export | Window at the bottom right after a save; log from the menu |
 | Set Tenant Language | Switches the console between two preset languages in one click | 🌐 buttons in the menu; Intune, Azure, Entra, Defender, Purview |
 | PIM shortcut | Opens PIM > My roles (eligible or active assignments) on the active tab's tenant in one click | 🔑 PIM eligible and 🔑 PIM active buttons in the menu |
+| Policy Import | Creates policies from As-Built JSON exports, without assignments. **Writes to the tenant: off by default** | Import button, right of As-Built (Intune) |
 
 ## Installation
 
@@ -60,6 +62,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Feature | Network traffic | Content |
 |---|---|---|
 | As-Built, Assignment Lens | Reads (`GET`) on `graph.microsoft.com`, with the portal session | The policies, apps and groups shown, as the portal itself does |
+| Policy Import, if you turn it on | Reads existing names (`GET`) and creates (`POST`) on `graph.microsoft.com`, with the portal session | The policies of the files you choose and confirm, without assignments |
 | Settings Explainer | Cookie-less reads of public `learn.microsoft.com/…/windows/client-management/mdm/` pages | No tenant data: only the name of the documentation page requested |
 | Tenant Guard, Setting Inspector, OpenIntuneBaseline, Change Snapshot, Set Tenant Language, PIM shortcut | None | They observe the page and the responses the portal already receives |
 
@@ -281,15 +284,43 @@ When Tenant Guard has detected the active tab's tenant (tenant ID or `*.onmicros
 - Address: `https://portal.azure.com/#@<tenant>/view/Microsoft_Azure_PIMCommon/ActivationMenuBlade/~/aadmigratedroles`. Tested on 2026-10-04 (both buttons); observed portal behavior, not documented on Microsoft Learn.
 - Code: `pim/lib.js` (tested: `node pim/test.js`), active tab selection in `background.js`.
 
+## Policy Import
+
+**Off by default: this is the only feature that writes to the tenant.** Turn it on in ⚙, then reload the portal tab.
+
+It creates Intune policies from As-Built JSON exports, without PowerShell, without an app registration and without Graph Explorer. The calls still go through Microsoft Graph, with the portal session.
+
+1. Click **Import**, right of the As-Built button, then choose one or more `.json` files.
+2. Check the preview: each row shows the type, the warnings and what blocks it. Nothing is written at this step.
+3. Click **Import (n)**, then type the directory name shown to confirm, whatever the tenant.
+
+**Supported**: settings catalog, configuration profiles (including `.mobileconfig` and `.plist` custom profiles), compliance, PowerShell scripts, macOS shell scripts, macOS custom attributes, remediations. Other types in an export (apps, ADMX, enrollment, roles…) are flagged and ignored.
+
+- **No assignment**: a created policy affects no device until you assign it.
+- **Creation only**: one `POST` per policy, to a closed list of collections. Nothing is updated or deleted. To undo, delete the object in the portal: its ID is shown on the row.
+- **Secrets**: a policy whose secret is missing from the export (masked or encrypted value, Wi-Fi key) is blocked, to be created in the portal.
+- **Certificates**: a profile linked to a certificate profile (SCEP, Enterprise Wi-Fi, VPN, wired network…) is blocked, because that link is not in the export. Optional links do not block and are lost: SSO extension PKINIT certificate, Windows `privacyAccessControls`.
+- **Other tenant**: scope tags go back to Default, and compliance keeps only the block action, with its grace period.
+- **Duplicates**: a name already in the tenant is unchecked. If the names cannot be read, the type is blocked.
+- **Unknown result** (5xx error, network failure): the object may exist, so there is no retry. Check in the portal before running again.
+- **Permissions**: the portal token must carry `DeviceManagementConfiguration.ReadWrite.All` (profiles, catalog, compliance) and `DeviceManagementScripts.ReadWrite.All` (scripts). Your Intune role must also be active (PIM).
+- **Log**: Change Snapshot logs each creation, without one ticket card per object.
+
+> **Import trusted files only.** Scripts and profiles from a file are copied as they are: a script can run on devices as soon as you assign it. As-Built exports can also hold clear-text tokens in a custom profile (for example an agent enrollment token).
+
+Graph validates each object on creation: a rare profile type may be refused, and its message then shows on the row.
+
+- Code: `policy-import/lib.js` (tested: `node policy-import/test.js`), `policy-import/page.js`.
+
 ## Moving panels
 
-As-Built and Assignment Lens do not open at the same time: opening one collapses the other to its button.
+As-Built, Assignment Lens and Policy Import do not open at the same time: opening one closes the others.
 
 The As-Built and Assignment Lens buttons and panels can be moved with the mouse (button: drag; panel: drag the header). The position is stored per element in the portal's `localStorage` (`tenant-compass:pos:*` keys), shared code in `shared/drag.js`. The **Reset positions** button in the menu clears these keys in the active tab and reloads it.
 
 ## How it works
 
-`background.js` dynamically registers (`chrome.scripting.registerContentScripts`) the scripts of the checked features, based on the `chrome.storage.sync` key `features` (all on by default). Each feature lives in its own folder (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), with a `lib.js` testable under Node and a `test.js`. The shared style (#0078d4 → #5b5fc7 gradient) and dragging (`shared/drag.js`) are common. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
+`background.js` dynamically registers (`chrome.scripting.registerContentScripts`) the scripts of the checked features, based on the `chrome.storage.sync` key `features` (all on by default, except Policy Import). Each feature lives in its own folder (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), with a `lib.js` testable under Node and a `test.js`. The shared style (#0078d4 → #5b5fc7 gradient) and dragging (`shared/drag.js`) are common. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Limitations
 
@@ -310,6 +341,7 @@ cd ../settings-explainer && node test.js
 cd ../assignment-lens && node test.js
 cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
+cd ../policy-import && node test.js
 ```
 
 ## License
