@@ -161,12 +161,22 @@ assert.strictEqual(noScope.body, null);
 const already = { ...ready('sc', 'X'), body: null, blockers: ['policyImport.block.secret'] };
 assert.deepStrictEqual(L.markDuplicates([already], {}, [])[0].blockers, ['policyImport.block.secret']);
 
-// The word to type is the directory name, else the start of the tenant ID
-assert.strictEqual(L.confirmWord(' Contoso ', 'aaaaaaaa-bbbb'), 'Contoso');
-assert.strictEqual(L.confirmWord('', 'aaaaaaaa-bbbb'), 'aaaaaaaa');
-assert.ok(L.confirmMatches('Contoso', ' contoso '));
-assert.ok(!L.confirmMatches('Contoso', 'Contos'));
-assert.ok(!L.confirmMatches('', ''));
+// Optional prefix: changes the name shown and the name sent, in the property of each type, and nothing else
+const toPrefix = { kind: 'sc', name: 'A', body: { name: 'A', description: 'd' }, blockers: [], warnings: [] };
+const prefixed = L.applyPrefix(toPrefix, 'TEST - ');
+assert.strictEqual(prefixed.name, 'TEST - A');
+assert.deepStrictEqual(prefixed.body, { name: 'TEST - A', description: 'd' });
+assert.strictEqual(toPrefix.body.name, 'A'); // the prepared entry stays intact: the prefix can change
+assert.strictEqual(L.applyPrefix({ kind: 'dc', name: 'D', body: { displayName: 'D', payload: 'eA==' } }, 'X-').body.displayName, 'X-D');
+assert.strictEqual(L.applyPrefix({ kind: 'sh', name: 'S', body: { displayName: 'S', fileName: 'a.zsh' } }, 'X-').body.fileName, 'a.zsh');
+assert.strictEqual(L.applyPrefix(toPrefix, ''), toPrefix);
+assert.strictEqual(L.applyPrefix(toPrefix, '   '), toPrefix);
+assert.strictEqual(L.applyPrefix(toPrefix, '  T ').name, 'T A'); // the separator typed by the user is kept
+const blockedEntry = { kind: 'sc', name: 'B', body: null, blockers: ['policyImport.block.secret'], warnings: [] };
+assert.strictEqual(L.applyPrefix(blockedEntry, 'X-'), blockedEntry);
+// Duplicates are checked on the name that will be created
+assert.strictEqual(L.markDuplicates([L.applyPrefix(ready('sc', 'Base'), 'T-')], { sc: ['Base'] }, KINDS)[0].duplicate, false);
+assert.strictEqual(L.markDuplicates([L.applyPrefix(ready('sc', 'Base'), 'T-')], { sc: ['t-base'] }, KINDS)[0].duplicate, true);
 
 // ---------- running the import ----------
 

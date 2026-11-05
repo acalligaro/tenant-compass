@@ -102,7 +102,7 @@ tenant-compass/
 ├── policy-import/
 │   ├── page.js                   Jeton observé, relais `names` / `post`, panneau, aperçu, confirmation, unique POST de l'extension (MAIN world)
 │   ├── lib.js                    Fonctions pures : lecture d'un export As-Built, corps de requête, blocages, table des types, jeton, exécution
-│   ├── i18n.js                   Dictionnaire FR / EN (53 clés)
+│   ├── i18n.js                   Dictionnaire FR / EN (55 clés)
 │   └── test.js                   Tests Node
 ├── portal-language/
 │   ├── lib.js                    Set Tenant Language : LANGUAGES (24), FORMATS (30), isPortal(), portalUrl() (chargé par le popup)
@@ -512,8 +512,9 @@ Les paramètres `l=` et `mkt=` sont des comportements **observés**, **non docum
 1. Toutes les frames : `window.fetch`, `XMLHttpRequest` et, en frame top, `MessagePort` / `Worker` sont observés. Un jeton est gardé en mémoire **par type importable**, selon son droit d'écriture.
 2. Ouverture du panneau : `ping` sans donnée vers toutes les frames. Une frame qui détient un jeton répond `pong` avec ses types et le `tid`, jamais le jeton.
 3. Fichiers choisis : `parseFile` lit la forme As-Built (`{ tenantId, policies: [{ type, policy, settings, assignments, error }] }`), `prepare` construit le corps et les blocages. `relay('names', type)` lit les noms existants de chaque type présent, puis `markDuplicates` marque les doublons.
-4. **Importer (n)** ouvre un dialogue : annuaire, `tid`, nombre d'objets, nombre de scripts, absence d'affectation. Le bouton reste inactif tant que le nom de l'annuaire n'est pas saisi (`confirmWord`, début du `tid` si le nom est absent), quel que soit le classement du tenant dans Tenant Guard : un tenant non référencé peut être de la production.
-5. `runImport` envoie un `POST` à la fois, avec 250 ms de pause. `createPolicy` refuse d'envoyer si le jeton n'appartient plus au `tid` confirmé.
+4. Préfixe optionnel : `applyPrefix` l'ajoute au nom créé (`name` ou `displayName` selon le type), sur une copie, et les doublons sont recalculés sur ce nom à chaque frappe. Le champ se fige dès qu'une ligne est envoyée, jusqu'aux fichiers suivants.
+5. **Importer (n)** ouvre un dialogue : annuaire, `tid`, nombre d'objets, préfixe, nombre de scripts, absence d'affectation. **OK** lance la création, **Annuler** (focus par défaut) referme. Aucune saisie n'est demandée, y compris sur un tenant PROD : choix de l'utilisateur du 2026-11-05.
+6. `runImport` envoie un `POST` à la fois, avec 250 ms de pause. `createPolicy` refuse d'envoyer si le jeton n'appartient plus au `tid` confirmé.
 
 **Endpoints.** `POST` et `GET ?$select=id,<nom>` sur `deviceManagement/` : `configurationPolicies`, `deviceConfigurations`, `deviceCompliancePolicies` (`DeviceManagementConfiguration.ReadWrite.All`) ; `deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts` (`DeviceManagementScripts.ReadWrite.All`). L'URL vient de la table `KINDS`, jamais du fichier ni d'un message. Pas de `PATCH`, `PUT`, `DELETE`, `$batch` ni d'affectation (vérifié par `test.js`).
 
@@ -533,9 +534,9 @@ Les paramètres `l=` et `mkt=` sont des comportements **observés**, **non docum
 
 **Stockage.** Aucun : jeton et fichiers restent en mémoire. Positions : `policy-import-fab`, `policy-import-panel`.
 
-**UI.** Hôte `#policy-import`, Shadow DOM fermé. Le garde-clic de Tenant Guard ne voit pas ces boutons, et `policy-import` n'est volontairement pas dans `OWN_UI` : le dialogue saisi fait office de garde.
+**UI.** Hôte `#policy-import`, Shadow DOM fermé. Le garde-clic de Tenant Guard ne voit pas ces boutons, et `policy-import` n'est volontairement pas dans `OWN_UI` : le dialogue de confirmation fait office de garde.
 
-**Tests.** `policy-import/test.js` : lecture, corps, blocages, table fermée, droits par type, doublons, confirmation, règles de réessai, clés i18n, `policyImport: false` dans les deux `DEFAULTS`, contrôles statiques de `page.js` (un seul `POST`, aucune fuite, aucune affectation).
+**Tests.** `policy-import/test.js` : lecture, corps, blocages, table fermée, droits par type, doublons, préfixe, règles de réessai, clés i18n, `policyImport: false` dans les deux `DEFAULTS`, contrôles statiques de `page.js` (un seul `POST`, aucune fuite, aucune affectation).
 
 ---
 
@@ -574,7 +575,7 @@ Les paramètres `l=` et `mkt=` sont des comportements **observés**, **non docum
 - `background.js` enregistre le marqueur **`ui-lang`** : `shared/lang/fr.js` ou `shared/lang/en.js` selon `lang`, `document_start`, toutes les frames, tous les `host_permissions`, monde ISOLATED. Il pose `<html data-tenant-compass-lang="fr|en">`, attribut lisible par les deux mondes (les scripts MAIN n'ont pas accès à `chrome.*`).
 - `withI18n` ajoute en tête de chaque script de fonction l'assistant puis `<fonction>/i18n.js`. **Chrome n'injecte un fichier qu'une fois par frame, quel que soit le monde** : un fichier listé par un script MAIN et par un script ISOLATED ne s'exécute que dans le premier injecté. D'où un chemin par monde pour l'assistant (`shared/i18n-page.js` en MAIN, `shared/i18n-page-isolated.js` en ISOLATED, copies identiques vérifiées par `tenant-guard/test.js`), et `i18n: false` sur les hooks MAIN sans texte, pour que `<fonction>/i18n.js` arrive dans le script ISOLATED qui affiche la carte. Aucun fichier n'est listé dans les deux mondes (vérifié par `tenant-guard/test.js`) : `change-snapshot/lib.js` n'est enregistré que pour le hook MAIN, et `content.js` le charge par `import()` (ressource web accessible). Avant cette règle, `lib.js` pouvait partir dans le monde ISOLATED et `page.js` s'arrêtait sans rien observer.
 - `shared/i18n-page.js` n'expose qu'un global, `globalThis.__tenantCompassI18n` (garde contre le double chargement, pour ne pas heurter les globaux du portail) : `lang()` (lit l'attribut à chaque appel, `fr` par défaut), `add({ fr, en })` (fusionne un dictionnaire), `t(key, vars)` (repli sur `fr` puis sur la clé, variables `{nom}`).
-- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 39, Change Snapshot 36, Policy Import 53.
+- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 39, Change Snapshot 36, Policy Import 55.
 - Les `lib.js` gardent des défauts français pour les tests Node (As-Built : `T(key, frDefault)`), à garder alignés sur le `fr` de `i18n.js`.
 - `storage.onChanged` sur `lang` relance `apply()` ; la nouvelle langue s'applique aux onglets du portail **après rechargement** (bouton `#reload-btn`). La page Journal, page d'extension, se re-rend immédiatement.
 - Ajouter une langue : un dictionnaire de plus dans `I18N` et dans chaque `<fonction>/i18n.js` (mêmes clés), un `shared/lang/<xx>.js`, la valeur dans `LANGS` (`background.js`), dans `dict` et `lang()` de `shared/i18n-page.js`, dans la liste de `journal.js`, et un bouton `data-lang` dans `popup.html`.
@@ -631,7 +632,7 @@ Toutes les UI injectées vivent dans un Shadow DOM (`:host { all: initial; color
 | Change Snapshot | Oui, en-tête `Authorization` des écritures observées (page et workers `blob:`), décodé localement sans vérification de signature | Métadonnées de la requête en cours, le temps de la décoder | Jamais : seuls les claims `upn` et `tid` sortent du monde MAIN (rien pour un GET) | Aucun |
 | Set Tenant Language | Non | — | — | Aucun (seulement `chrome.tabs.update` de l'onglet actif) |
 | Raccourci PIM | Non | — | — | Aucun (`chrome.tabs.create` vers `portal.azure.com`, puis un clic d'onglet dans cette page) |
-| Policy Import | Oui, en-tête `Authorization` ou JWT vu dans un `postMessage` du shell ; gardé seulement si le droit d'écriture du type y figure | Variable de closure, par frame et par type | Jamais : seuls les types et le `tid` passent dans `pong` | Après confirmation saisie : `POST` de création vers une liste fermée de collections, `GET` des noms (nextLink vérifié). **Seule écriture de l'extension.** |
+| Policy Import | Oui, en-tête `Authorization` ou JWT vu dans un `postMessage` du shell ; gardé seulement si le droit d'écriture du type y figure | Variable de closure, par frame et par type | Jamais : seuls les types et le `tid` passent dans `pong` | Après confirmation (bouton OK) : `POST` de création vers une liste fermée de collections, `GET` des noms (nextLink vérifié). **Seule écriture de l'extension.** |
 
 Le jeton n'est jamais écrit dans `chrome.storage`, `localStorage`, la console, ni envoyé au service worker. Change Snapshot écrit seulement `upn` et `tid` dans ses entrées de journal. Les appels utilisent `credentials: 'omit'`. Comme le code tourne en MAIN world, il partage le contexte JavaScript du portail : la protection repose sur la portée de closure, pas sur une isolation du navigateur.
 

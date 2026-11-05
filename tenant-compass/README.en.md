@@ -292,10 +292,11 @@ It creates Intune policies from As-Built JSON exports, without PowerShell, witho
 
 1. Click **Import**, right of the As-Built button, then choose one or more `.json` files.
 2. Check the preview: each row shows the type, the warnings and what blocks it. Nothing is written at this step.
-3. Click **Import (n)**, then type the directory name shown to confirm, whatever the tenant.
+3. Click **Import (n)**, check the directory and tenant shown, then click **OK**.
 
 **Supported**: settings catalog, configuration profiles (including `.mobileconfig` and `.plist` custom profiles), compliance, PowerShell scripts, macOS shell scripts, macOS custom attributes, remediations. Other types in an export (apps, ADMX, enrollment, roles…) are flagged and ignored.
 
+- **Prefix** (optional): added to the name of each created object, with the separator you type (`TEST - My policy`). The preview shows the final name, and duplicates are checked on that name. Script file names and custom attribute names do not change.
 - **No assignment**: a created policy affects no device until you assign it.
 - **Creation only**: one `POST` per policy, to a closed list of collections. Nothing is updated or deleted. To undo, delete the object in the portal: its ID is shown on the row.
 - **Secrets**: a policy whose secret is missing from the export (masked or encrypted value, Wi-Fi key) is blocked, to be created in the portal.

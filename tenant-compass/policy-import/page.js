@@ -1,6 +1,6 @@
 // MAIN world, every frame of the Intune portal. Off by⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ default: this is the only feature that writes to the tenant.
 // All frames: observe the bearer token the portal⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ sends to graph.microsoft.com (memory only) and answer the top frame's relay.
-// Top frame:⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ floating button, file picker, preview, typed confirmation, creation of the checked policies.
+// Top frame:⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ floating button, file picker, preview, confirmation, creation of the checked policies.
 // Writes: one POST per policy to a closed list of collections (lib.js). Nothing is updated, deleted or assigned.
 (() => {
   const L = globalThis.PolicyImportLib;
@@ -196,13 +196,16 @@
             box-shadow: 0 20px 50px rgba(0,0,0,.3); }
     .card h2 { margin: 0; font-size: 16px; font-weight: 600; }
     .card p { margin: 0; overflow-wrap: anywhere; }
-    .card input { padding: 7px 10px; border: 1px solid #8a8886; border-radius: 10px; }
+    .bar input[type=text] { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid #e1dfdd; border-radius: 10px; background: #faf9f8; color: #323130; outline: none; }
+    .bar input[type=text]:focus { border-color: #0078d4; box-shadow: 0 0 0 3px rgba(0,120,212,.15); background: #fff; }
+    .bar input[type=text]:disabled { color: #a19f9d; }
     .card .btns { display: flex; gap: 8px; }
   `);
 
   const TYPE_KEYS = { sc: 'policyImport.type.sc', dc: 'policyImport.type.dc', comp: 'policyImport.type.comp', ps: 'policyImport.type.ps',
     sh: 'policyImport.type.sh', cattr: 'policyImport.type.cattr', rem: 'policyImport.type.rem' };
   let panel = null, poll = 0, running = false, entries = [], fileErrors = [], lastStatus = '';
+  let prepared = [], namesByKind = {}, writable = [], prefix = ''; // what the preview is rebuilt from when the prefix changes
   const ui = {};
 
   const directoryName = () => document.querySelector('.fxs-avatarmenu-tenant')?.textContent.trim() || '';
@@ -243,6 +246,17 @@
     ui.go.disabled = running || !n;
     ui.all.disabled = running || !usable.length;
     ui.all.checked = !!usable.length && usable.every(e => e.checked);
+    ui.prefix.disabled = running || entries.some(e => e.result); // the rows already sent keep their name: frozen until the next files
+  }
+
+  // Preview for the current prefix. A row keeps the user's choice as long as its duplicate state does not change.
+  function rebuild() {
+    const old = entries;
+    entries = L.markDuplicates(prepared.map(e => L.applyPrefix(e, prefix)), namesByKind, writable).map((e, i) => ({ ...e, locked: false, result: null,
+      checked: old[i] && old[i].duplicate === e.duplicate ? old[i].checked : !!e.body && !e.duplicate }));
+    const ready = entries.filter(e => e.body && !e.duplicate).length, dup = entries.filter(e => e.duplicate).length;
+    setStatus(T('policyImport.status.ready', { ready, dup, blocked: entries.filter(e => !e.body).length }));
+    renderRows();
   }
 
   // Fresh preview for the chosen files. Reads the existing names of each type present; nothing is written here.
@@ -252,40 +266,39 @@
     await discover();
     const tenant = tenantNow();
     if (!tenant) { setStatus(''); renderTenant(); return; }
-    const prepared = [], errors = [];
+    const read = [], errors = [];
     for (const f of files) {
       if (f.size > L.MAX_FILE_BYTES) { errors.push([f.name, 'policyImport.err.tooBig']); continue; }
       const parsed = L.parseFile(f.name, await f.text().catch(() => ''));
       if (parsed.error) errors.push([f.name, parsed.error]);
-      for (const raw of parsed.raw) prepared.push(L.prepare(raw, { sourceTenantId: parsed.tenantId, tenantId: tenant.tid }));
+      for (const raw of parsed.raw) read.push(L.prepare(raw, { sourceTenantId: parsed.tenantId, tenantId: tenant.tid }));
     }
-    const namesByKind = {};
-    for (const kind of new Set(prepared.filter(e => e.body && tenant.kinds.includes(e.kind)).map(e => e.kind))) {
+    const names = {};
+    for (const kind of new Set(read.filter(e => e.body && tenant.kinds.includes(e.kind)).map(e => e.kind))) {
       const r = await relay('names', kind);
-      if (Array.isArray(r.names)) namesByKind[kind] = r.names;
+      if (Array.isArray(r.names)) names[kind] = r.names;
     }
-    entries = L.markDuplicates(prepared, namesByKind, tenant.kinds).map(e => ({ ...e, checked: !!e.body && !e.duplicate, locked: false, result: null }));
+    prepared = read;
+    namesByKind = names;
+    writable = tenant.kinds;
     fileErrors = errors;
-    const ready = entries.filter(e => e.body && !e.duplicate).length, dup = entries.filter(e => e.duplicate).length;
-    setStatus(T('policyImport.status.ready', { ready, dup, blocked: entries.filter(e => !e.body).length }));
-    renderRows();
+    entries = [];
+    rebuild();
   }
 
   function askConfirm() {
     const todo = selected(), tenant = tenantNow();
     if (!todo.length || !tenant) return;
-    const directory = directoryName(), word = L.confirmWord(directory, tenant.tid), scripts = todo.filter(e => e.hasScript).length;
+    const scripts = todo.filter(e => e.hasScript).length, shown = prefix.trimStart();
     const close = () => dialog.remove();
-    const typed = el('input', { type: 'text', spellcheck: false, autocomplete: 'off', oninput: () => { ok.disabled = !L.confirmMatches(word, typed.value); } });
     const cancel = el('button', { className: 'act ghost', textContent: T('policyImport.confirm.cancel'), onclick: close });
-    const ok = el('button', { className: 'act', textContent: T('policyImport.ui.go', { n: todo.length }), disabled: true, onclick: () => { close(); run(todo, tenant.tid); } });
+    const ok = el('button', { className: 'act', textContent: T('policyImport.confirm.ok'), onclick: () => { close(); run(todo, tenant.tid); } });
     const dialog = el('div', { className: 'dialog', onkeydown: e => { if (e.key === 'Escape') close(); } }, el('div', { className: 'card', role: 'dialog', ariaModal: 'true' },
       el('h2', { textContent: T('policyImport.confirm.title', { n: todo.length }) }),
-      el('p', { textContent: T('policyImport.confirm.tenant', { directory: directory || '?', tid: tenant.tid }) }),
+      el('p', { textContent: T('policyImport.confirm.tenant', { directory: directoryName() || '?', tid: tenant.tid }) }),
+      ...(shown ? [el('p', { textContent: T('policyImport.confirm.prefix', { prefix: shown }) })] : []),
       el('p', { textContent: T('policyImport.confirm.noAssign') }),
       ...(scripts ? [el('p', { textContent: T('policyImport.confirm.scripts', { n: scripts }) })] : []),
-      el('p', { textContent: T('policyImport.confirm.type', { word }) }),
-      typed,
       el('div', { className: 'btns' }, cancel, ok)));
     ui.root.append(dialog);
     cancel.focus(); // safe default: Enter cancels
@@ -327,13 +340,15 @@
       for (const e of entries) if (e.body && !e.locked) e.checked = ui.all.checked;
       renderRows();
     } });
+    ui.prefix = el('input', { type: 'text', value: prefix, maxLength: 100, spellcheck: false, autocomplete: 'off', placeholder: T('policyImport.ui.prefix'), title: T('policyImport.ui.prefix'),
+      oninput: () => { prefix = ui.prefix.value; if (prepared.length) rebuild(); } });
     ui.list = el('div', { className: 'list' });
     ui.fill = el('i');
     ui.progress = el('div', { className: 'progress' }, ui.fill);
     ui.status = el('div', { className: 'status', textContent: lastStatus });
     ui.go = el('button', { className: 'act', onclick: askConfirm });
     const head = el('div', { className: 'head', title: T('policyImport.ui.drag') }, T('policyImport.ui.title'), el('button', { className: 'x', textContent: '×', title: T('policyImport.ui.close'), onclick: toggle }));
-    panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.all, ui.pick),
+    panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.prefix), el('div', { className: 'bar' }, ui.all, ui.pick),
       ui.list, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
     ui.root.append(panel);
     opened();

@@ -294,10 +294,11 @@ Elle crée des stratégies Intune à partir des exports JSON d'As-Built, sans Po
 
 1. Cliquer sur **Import**, à droite du bouton As-Built, puis choisir un ou plusieurs fichiers `.json`.
 2. Vérifier l'aperçu : chaque ligne indique le type, les avertissements et ce qui la bloque. Rien n'est écrit à cette étape.
-3. Cliquer sur **Importer (n)**, puis saisir le nom de l'annuaire affiché pour confirmer, quel que soit le tenant.
+3. Cliquer sur **Importer (n)**, vérifier l'annuaire et le tenant affichés, puis cliquer sur **OK**.
 
 **Pris en charge** : catalogue de paramètres, profils de configuration (dont les profils personnalisés `.mobileconfig` et `.plist`), conformité, scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, remédiations. Les autres types d'un export (applications, ADMX, inscription, rôles…) sont signalés et ignorés.
 
+- **Préfixe** (optionnel) : ajouté au nom de chaque objet créé, avec le séparateur que vous tapez (`TEST - Ma stratégie`). L'aperçu montre le nom final, et les doublons sont vérifiés sur ce nom. Les noms de fichier des scripts et les noms de custom attribute ne changent pas.
 - **Aucune affectation** : une stratégie créée n'a d'effet sur aucun appareil tant que vous ne l'affectez pas.
 - **Création seulement** : un `POST` par stratégie, vers une liste fermée de collections. Rien n'est modifié ni supprimé. Pour annuler, supprimez l'objet dans le portail : son ID s'affiche sur la ligne.
 - **Secrets** : une stratégie dont un secret est absent de l'export (valeur masquée ou chiffrée, clé Wi-Fi) est bloquée, à créer dans le portail.

@@ -185,9 +185,13 @@
     });
   }
 
-  // What the user types to confirm: the directory name shown in⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ the portal, else the start of the tenant ID.
-  const confirmWord = (directory, tid) => String(directory || '').trim() || String(tid || '').slice(0, 8);
-  const confirmMatches = (word, typed) => !!word && norm(word) === norm(typed);
+  // Optional prefix, in the name property of the type. Returns a copy: the prefix can still change. The separator is up to the user.
+  function applyPrefix(e, prefix) {
+    const text = String(prefix || '').trimStart();
+    if (!text || !e.body) return e;
+    const name = text + e.name;
+    return { ...e, name, body: { ...e.body, [nameField(e.kind)]: name } };
+  }
 
   // ---------- running the import ----------
 
@@ -218,7 +222,7 @@
     return out;
   }
 
-  const api = { MAX_FILE_BYTES, parseFile, prepare, endpointFor, nameField, namesUrl, tokenInfo, jwtsIn, markDuplicates, confirmWord, confirmMatches, runImport };
+  const api = { MAX_FILE_BYTES, parseFile, prepare, endpointFor, nameField, namesUrl, tokenInfo, jwtsIn, markDuplicates, applyPrefix, runImport };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.PolicyImportLib = api; // always: a stray `module` global must not hide the lib from the page
 })();
