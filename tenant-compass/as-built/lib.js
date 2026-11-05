@@ -278,13 +278,12 @@
     return out.join('\n');
   }
 
-  // Word-compatible HTML (saved as .doc): h1-h3 map to Word's Heading styles.⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
-  function toWordHtml(policies, title) {
-    const e = htmlEscape, x = docText();
-    if (title) x.title = title;
+  // One block per policy, shared by the Word and HTML exports. Every value goes through htmlEscape.
+  function htmlSections(policies, x) {
+    const e = htmlEscape;
     const cell = (tag, v) => `<${tag}>${e(v).replace(/\r?\n/g, '<br>')}</${tag}>`;
     const table = (head, rows) => `<table><tr>${head.map(h => cell('th', h)).join('')}</tr>${rows.map(r => `<tr>${r.map(v => cell('td', v)).join('')}</tr>`).join('')}</table>`;
-    const body = policies.map(p => [
+    return policies.map(p => [
       `<h2>${e(p.name)}</h2>`,
       `<table>${meta(p, x).map(([k, v]) => `<tr>${cell('th', k)}${cell('td', v)}</tr>`).join('')}</table>`,
       `<h3>${e(x.settings)}</h3>`,
@@ -292,6 +291,39 @@
       `<h3>${e(x.assignments)}</h3>`,
       p.assignments.length ? table([x.group, x.mode, x.filter], p.assignments.map(a => [a.group, a.mode, a.filter])) : `<p><i>${e(x.noAssignments)}</i></p>`,
     ].join('\n')).join('\n');
+  }
+
+  // Standalone page for a browser: inline style, no script, nothing loaded from outside.
+  function toHtml(policies, title) {
+    const e = htmlEscape, x = docText();
+    if (title) x.title = title;
+    const lang = globalThis.__tenantCompassI18n?.lang?.() || 'fr';
+    return `<!doctype html>
+<html lang="${e(lang)}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${e(x.title)}</title>
+<style>
+:root { color-scheme: light; }
+body { max-width: 1100px; margin: 0 auto; padding: 24px; color: #1b1a19; font: 14px/1.5 "Segoe UI", system-ui, sans-serif; }
+h1 { color: #005a9e; font-size: 26px; }
+h2 { margin-top: 36px; padding-bottom: 6px; border-bottom: 2px solid #0078d4; font-size: 20px; }
+h3 { margin-bottom: 6px; font-size: 15px; }
+table { width: 100%; margin-bottom: 12px; border-collapse: collapse; }
+th, td { padding: 6px 8px; border: 1px solid #e1dfdd; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+th { background: #eff6fc; font-weight: 600; }
+i { color: #605e5c; }
+@media print { body { max-width: none; padding: 0; } h2, h3 { break-after: avoid; } tr { break-inside: avoid; } }
+</style></head>
+<body>
+<h1>${e(x.title)}</h1>
+${htmlSections(policies, x)}
+</body></html>`;
+  }
+
+  // Word-compatible HTML (saved as .doc): h1-h3 map to Word's Heading styles.⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
+  function toWordHtml(policies, title) {
+    const e = htmlEscape, x = docText();
+    if (title) x.title = title;
+    const body = htmlSections(policies, x);
     return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="utf-8"><title>${e(x.title)}</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
@@ -564,7 +596,7 @@ ${body}
   // "Windows, macOS" -> ['Windows', 'macOS'] (policySummary joins multi-platform policies with ", ").⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
   const platformsOf = p => String(p.platform || '').split(',').map(s => s.trim()).filter(Boolean);
 
-  const api = { EXPAND_ASSIGNMENTS, caAssignmentRows, caState, isEntraToken, tokenKinds, jwtsIn, caIds, withNames, caRows, isIntuneToken, guidsIn, orderItems, IMAGE_KEYS, autopilotRows, autopilotCsv, roleAssignmentRows, mdmAssignmentRows, scriptFiles, fileName, platformsOf, jwtTid, maskSecrets, toJson, htmlEscape, mdEscapeCell, fmtDate, policySummary, categoryPath, settingRows, propertyRows, admxRows, assignmentRows, toMarkdown, toWordHtml };
+  const api = { EXPAND_ASSIGNMENTS, caAssignmentRows, caState, isEntraToken, tokenKinds, jwtsIn, caIds, withNames, caRows, isIntuneToken, guidsIn, orderItems, IMAGE_KEYS, autopilotRows, autopilotCsv, roleAssignmentRows, mdmAssignmentRows, scriptFiles, fileName, platformsOf, jwtTid, maskSecrets, toJson, htmlEscape, mdEscapeCell, fmtDate, policySummary, categoryPath, settingRows, propertyRows, admxRows, assignmentRows, toMarkdown, toWordHtml, toHtml };
   if (typeof module !== 'undefined') module.exports = api;
   else globalThis.AsBuiltLib = api;
 })();

@@ -332,3 +332,25 @@ const partial = L.toJson([{ kind: 'cattr', id: 'c', raw: { policy: { id: 'c' }, 
 assert.deepStrictEqual([partial.type, partial.policy.id, partial.assignmentsError], ['deviceCustomAttributeShellScript', 'c', 'Graph 403']); // config kept, failure visible
 assert.ok(!('assignmentsError' in L.toJson([{ kind: 'sh', id: 's', raw: { policy: {} } }], {}).policies[0]));
 console.log('as-built: macOS scripts and profiles checks passed');
+
+// HTML export: a standalone page with the content of the Word export, every value escaped
+{
+  const hostile = { ...pol, name: '<script>alert(1)</script>', description: 'Ligne 1\nLigne 2',
+    settings: [{ path: 'Defender', name: 'A & B', value: '<img src=x onerror=alert(1)>' }], assignments: [{ group: 'G & H', mode: 'Inclure', filter: '' }] };
+  const html = L.toHtml([hostile]);
+  assert.ok(html.startsWith('<!doctype html>'));
+  assert.ok(html.includes('<meta charset="utf-8">'));
+  assert.ok(html.includes('<html lang="fr">'));
+  assert.ok(!html.includes('<script') && html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+  assert.ok(!html.includes('<img') && html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+  assert.ok(html.includes('<td>G &amp; H</td>'));
+  assert.ok(html.includes('Ligne 1<br>Ligne 2'));
+  assert.ok(!/urn:schemas|mso|https?:\/\/|\burl\(|@import/.test(html), 'no Word markup, nothing loaded from outside');
+  assert.ok(L.toHtml([pol], 'Titre Entra').includes('<title>Titre Entra</title>'));
+  // Same sections as the Word export, so the two documents cannot drift apart
+  const sections = s => s.slice(s.indexOf('<h2>'), s.indexOf('</body>'));
+  assert.strictEqual(sections(html), sections(L.toWordHtml([hostile])));
+  const empty = L.toHtml([{ ...pol, settings: [], assignments: [] }]);
+  assert.ok(empty.includes('<i>') && empty.includes('<h3>'));
+  console.log('as-built: HTML export checks passed');
+}

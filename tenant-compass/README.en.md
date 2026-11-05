@@ -38,7 +38,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Feature | What it does | Where |
 |---|---|---|
 | Tenant Guard | Pill and colored frame for the active tenant; confirmation before Save, Delete, Assign, Create, Wipe, Retire in a PROD tenant | Intune, Entra, Azure, Defender, M365, Purview, Exchange, Teams, SharePoint admin consoles (see [Supported consoles](#supported-consoles)) |
-| One-click As-Built | Exports the selected policies to Markdown, Word and JSON, scripts included. Intune and Entra (Conditional Access, authentication, mobility) | Button at the bottom left (Intune, Entra, Azure) |
+| One-click As-Built | Exports the selected policies to Markdown, Word, HTML and JSON, scripts included. Intune and Entra (Conditional Access, authentication, mobility) | Button at the bottom left (Intune, Entra, Azure) |
 | Setting Inspector | Card on setting hover, details section: definition ID, OMA-URI / key, applicability, license, equivalent GPO, Learn links | Card on the right edge, on setting hover |
 | Settings Explainer | Same card, explanation section: written text, live Learn page, values, default. Can be used on its own | Same card |
 | OpenIntuneBaseline | Same card, OIB section: value set by the OpenIntuneBaseline community baseline and the policy concerned. Can be used on its own | Same card |

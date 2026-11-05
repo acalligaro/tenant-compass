@@ -38,7 +38,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Fonction | Ce qu'elle fait | Où |
 |---|---|---|
 | Tenant Guard | Bandeau et cadre de couleur du tenant actif ; confirmation avant Enregistrer, Supprimer, Attribuer, Créer, Wipe, Retire dans un tenant PROD | Consoles d'administration Intune, Entra, Azure, Defender, M365, Purview, Exchange, Teams, SharePoint (voir [Consoles prises en charge](#consoles-prises-en-charge)) |
-| As-Built en un clic | Export des stratégies choisies en Markdown, Word et JSON, scripts compris. Intune et Entra (accès conditionnel, authentification, mobilité) | Bouton en bas à gauche (Intune, Entra, Azure) |
+| As-Built en un clic | Export des stratégies choisies en Markdown, Word, HTML et JSON, scripts compris. Intune et Entra (accès conditionnel, authentification, mobilité) | Bouton en bas à gauche (Intune, Entra, Azure) |
 | Setting Inspector | Carte au survol d'un paramètre du catalogue, section détails : identifiant, OMA-URI / clé, applicabilité, licence, GPO équivalente, liens Learn | Carte au bord droit, au survol d'un paramètre |
 | Settings Explainer | Même carte, section explication : texte rédigé, page Learn lue en direct, valeurs, valeur par défaut. Activable seule | Même carte |
 | OpenIntuneBaseline | Même carte, section OIB : valeur configurée par la baseline communautaire OpenIntuneBaseline et stratégie concernée. Activable seule | Même carte |

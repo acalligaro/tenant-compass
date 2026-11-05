@@ -396,6 +396,7 @@
     ui.buttons = [
       el('button', { className: 'act', textContent: 'Markdown', onclick: () => run('md') }),
       el('button', { className: 'act', textContent: 'Word', onclick: () => run('doc') }),
+      el('button', { className: 'act', textContent: 'HTML', onclick: () => run('html') }),
       el('button', { className: 'act', textContent: 'JSON', onclick: () => run('json') }),
       el('button', { className: 'act ghost', textContent: T('asBuilt.ui.copyMd'), title: T('asBuilt.ui.copyMdTitle'), onclick: () => run('copy') }),
     ];
@@ -502,6 +503,7 @@
       const FORMATS = {
         md: ['md', 'text/markdown;charset=utf-8', ps => L.toMarkdown(ps, title)],
         doc: ['doc', 'application/msword', ps => '\ufeff' + L.toWordHtml(ps, title)],
+        html: ['html', 'text/html;charset=utf-8', ps => L.toHtml(ps, title)],
         json: ['json', 'application/json', ps => JSON.stringify(L.toJson(ps, meta), null, 2)],
       };
       if (mode === 'copy') await navigator.clipboard.writeText(L.toMarkdown(policies, title));

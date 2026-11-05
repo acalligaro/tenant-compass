@@ -11,7 +11,7 @@ Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111)
 | Fonction | Rôle en une ligne |
 |---|---|
 | **Tenant Guard** | Bandeau et cadre coloré du tenant actif, confirmation avant toute action d'écriture dans un tenant marqué PROD. |
-| **As-Built** | Bouton flottant : export des stratégies Intune en Markdown, Word (.doc) et JSON, plus les scripts et profils personnalisés (.ps1, .sh, .zsh, .mobileconfig). |
+| **As-Built** | Bouton flottant : export des stratégies Intune en Markdown, Word (.doc), HTML et JSON, plus les scripts et profils personnalisés (.ps1, .sh, .zsh, .mobileconfig). |
 | **Setting Inspector** | Carte au survol d'un paramètre du catalogue, section détails : ID, OMA-URI / clé, licence, version OS min., GPO, liens Learn. |
 | **Settings Explainer** | Même carte, section explication (texte rédigé, page CSP Learn lue en direct, valeurs, valeur par défaut). Activable seule. |
 | **OpenIntuneBaseline** | Même carte, section OIB : valeur configurée par la baseline communautaire OpenIntuneBaseline (GPL-3.0) et stratégie concernée. Activable seule. |
@@ -59,7 +59,7 @@ tenant-compass/
 │   ├── options.js                Partie Tenant Guard du popup : édition des tenants, couleurs, import / export
 │   └── test.js                   Tests Node
 ├── as-built/
-│   ├── lib.js                    Fonctions pures : résumés, lignes de paramètres, Markdown, Word, JSON, scripts
+│   ├── lib.js                    Fonctions pures : résumés, lignes de paramètres, Markdown, Word, HTML, JSON, scripts
 │   ├── i18n.js                   Dictionnaire FR / EN (82 clés : UI et titres des exports)
 │   ├── page.js                   Observation du jeton, relais GET entre frames, UI et exports (MAIN world)
 │   └── test.js                   Tests Node
@@ -219,7 +219,7 @@ Plus `tenant-guard/background.js`, chargé par `importScripts` dans le service w
 
 ### 4.2 As-Built
 
-**Rôle.** Lister les stratégies Intune et les exporter (Markdown, Word, JSON, copie Markdown), un fichier par stratégie ou un seul fichier, avec les scripts décodés en fichiers séparés.
+**Rôle.** Lister les stratégies Intune et les exporter (Markdown, Word, HTML, JSON, copie Markdown), un fichier par stratégie ou un seul fichier, avec les scripts décodés en fichiers séparés.
 
 **Scripts.**
 
@@ -267,7 +267,7 @@ sequenceDiagram
   W->>G: GET url (credentials omit)
   G-->>W: JSON
   W-->>T: {asBuilt:'res', id, status, body}
-  Note over T: Markdown / Word / JSON générés et téléchargés via Blob
+  Note over T: Markdown / Word / HTML / JSON générés et téléchargés via Blob
 ```
 
 **Langue des exports.** Les textes générés par `lib.js` (types, titres et en-têtes Markdown / Word, libellés) passent par `T(key, frDefault)` : `__tenantCompassI18n.t(key)` dans la page, le défaut français inline sous Node (tests). Les exports suivent donc la langue du menu au moment du chargement de l'onglet.
@@ -280,7 +280,7 @@ sequenceDiagram
 
 **Ordre de la liste** (`orderItems`) : la stratégie ouverte dans le portail (GUID de l'URL du blade, avec ou sans suffixe `_…`, `guidsIn`, relu chaque seconde tant que le panneau est ouvert, **non cochée**), puis les éléments cochés dans l'ordre du clic (`Set` d'insertion), puis le reste par nom. Au réordonnancement, la première ligne visible autre que celle cochée garde sa position à l'écran. L'export suit le même ordre.
 
-**`lib.js`** (`globalThis.AsBuiltLib`). `policySummary`, `platformsOf`, `categoryPath`, `settingRows`, `propertyRows`, `admxRows`, `assignmentRows`, `toMarkdown`, `toWordHtml`, `toJson`, `maskSecrets`, `jwtTid`, `scriptFiles`, `EXPAND_ASSIGNMENTS`, `fileName`, `htmlEscape`, `mdEscapeCell`, `fmtDate`.
+**`lib.js`** (`globalThis.AsBuiltLib`). `policySummary`, `platformsOf`, `categoryPath`, `settingRows`, `propertyRows`, `admxRows`, `assignmentRows`, `toMarkdown`, `toWordHtml`, `toHtml`, `toJson`, `maskSecrets`, `jwtTid`, `scriptFiles`, `EXPAND_ASSIGNMENTS`, `fileName`, `htmlEscape`, `mdEscapeCell`, `fmtDate`.
 
 **Tests.** `as-built/test.js` : échappements, lignes catalogue / modèles / ADMX / affectations, résumés, documents, JSON (masquage, `jwtTid`), noms de fichiers, scripts et licence des remédiations, scripts macOS (zsh, attributs personnalisés, PKG) et profils personnalisés.
 
@@ -653,7 +653,7 @@ Le jeton n'est jamais écrit dans `chrome.storage`, `localStorage`, la console, 
 | Change Snapshot, worker → page | `BroadcastChannel` au nom aléatoire par frame (`crypto.randomUUID()`), forme vérifiée puis filtrée par `wanted()` |
 | Change Snapshot, content → service worker → top | relais seulement si `sender.id === chrome.runtime.id` et onglet connu, livré au `frameId: 0` du même onglet |
 
-**Injection HTML.** Vérifié dans le code : les données (Graph, règles, signaux) sont insérées via `textContent`, `append(string)` ou `.value`. Les deux `innerHTML` présents (modale Tenant Guard, ligne du tableau dans `options.js`) sont des gabarits statiques, les valeurs étant posées ensuite par `textContent` / `.value`. La couleur d'une règle n'atteint le CSS que si elle matche `^#[0-9a-f]{6}$`. Les liens Learn ne sont rendus que s'ils commencent par `https://` (`rel="noopener noreferrer"`). L'export Word construit du HTML échappé par `htmlEscape` dans un fichier, pas dans le DOM. L'import de règles passe par `mergeRules` (filtrage et coercition des champs). Le dialogue et le journal Change Snapshot n'utilisent que `textContent` ; l'export CSV neutralise les formules tableur. Les traductions passent par les mêmes chemins (`textContent`, `title`).
+**Injection HTML.** Vérifié dans le code : les données (Graph, règles, signaux) sont insérées via `textContent`, `append(string)` ou `.value`. Les deux `innerHTML` présents (modale Tenant Guard, ligne du tableau dans `options.js`) sont des gabarits statiques, les valeurs étant posées ensuite par `textContent` / `.value`. La couleur d'une règle n'atteint le CSS que si elle matche `^#[0-9a-f]{6}$`. Les liens Learn ne sont rendus que s'ils commencent par `https://` (`rel="noopener noreferrer"`). Les exports Word et HTML construisent du HTML échappé par `htmlEscape` dans un fichier, pas dans le DOM ; la page HTML ne contient ni script ni ressource externe. L'import de règles passe par `mergeRules` (filtrage et coercition des champs). Le dialogue et le journal Change Snapshot n'utilisent que `textContent` ; l'export CSV neutralise les formules tableur. Les traductions passent par les mêmes chemins (`textContent`, `title`).
 
 **Navigation (Set Tenant Language).** `chrome.tabs.update` n'est appelé que si `isPortal` valide l'URL de l'onglet actif (HTTPS, hôte exact `intune.microsoft.com`, `endpoint.microsoft.com`, `portal.azure.com`, `entra.microsoft.com`, `security.microsoft.com` ou `purview.microsoft.com`) et que langue et format figurent dans les listes fermées `LANGUAGES` / `FORMATS`. Seul le paramètre `l` (ou `mkt` pour Defender / Purview) est modifié ; ni chemin, ni hôte, ni route `#` ne changent.
 
