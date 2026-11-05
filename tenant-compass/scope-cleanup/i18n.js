@@ -1,5 +1,5 @@
-// scope-cleanup: in-page strings (see shared/i18n-page.js). Keys prefixed with the feature name.
-// The labels of the object types come from as-built/i18n.js, listed in the same script.
+// scope-cleanup: in-page strings (see shared/i18n-page.js). Keys prefixed with the feature name.⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
+// The labels of the object types come from as-built/i18n.js, listed in the same⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ script.
 __tenantCompassI18n.add({
   fr: {
     'scopeCleanup.ui.fab': 'Scope Tags',

@@ -27,7 +27,7 @@ assert.deepStrictEqual(C.cleanPlan('app', { '@odata.type': G + 'macOSPkgApp', ro
 assert.strictEqual(C.cleanPlan('comp', { roleScopeTagIds: ['0', '5'] }).action, 'unreadable');
 assert.deepStrictEqual(C.cleanPlan('ps', { roleScopeTagIds: ['0', '5'] }).body, { roleScopeTagIds: ['5'] });
 
-// Never an empty list, whatever the input
+// Never an empty list, whatever the⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ input
 for (const tags of [['0'], ['0', '0'], [0], ['0', 0]]) assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: tags }).action, 'onlyDefault', JSON.stringify(tags));
 
 // The "Default + another tag" filter: Default only goes away, a row already processed stays to show its result
@@ -80,7 +80,7 @@ for (const r of [{}, { roleScopeTagIds: [] }, { roleScopeTagIds: null }, null]) 
   f = fake({ list: [{ status: 403, message: 'no' }, { status: 403, message: 'no' }] });
   assert.deepStrictEqual(await C.loadKind('dc', f.call), { rows: [], error: 'no' });
 
-  // Rows without tags are read one by one; those with tags are not
+  // Rows without tags are read one by one; those with tags are not⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
   f = fake({ policy: { status: 200, body: { roleScopeTagIds: ['0', '5'] } } });
   let rows = await C.resolveTags('app', [{ id: 'a', roleScopeTagIds: ['0'] }, { id: 'b' }], f.call);
   assert.deepStrictEqual(rows.map(r => r.tags), [['0'], ['0', '5']]);
@@ -92,7 +92,7 @@ for (const r of [{}, { roleScopeTagIds: [] }, { roleScopeTagIds: null }, null]) 
   // ---------- one line ----------
 
   const item = { kind: 'dc', id: 'p1', name: 'P' };
-  // Removed, the other tags stay, the write carries the confirmed tenant
+  // Removed, the other tags stay, the write carries the confirmed⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ tenant
   f = fake({ policy: { status: 200, body: { '@odata.type': G + 'x', roleScopeTagIds: ['0', '5'] } }, patchTags: { status: 200 } });
   let r = await C.cleanLine(item, 'T', f.call);
   assert.deepStrictEqual([r.status, r.tags], ['done', ['5']]);

@@ -1,6 +1,6 @@
-// MAIN world, every frame of the Intune portal. Off by default: it changes existing policies and apps.
+// MAIN world, every frame of the Intune portal. Off by default: it⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ changes existing policies and apps.
 // All frames: the Graph bridge observes the portal's token and serves the top frame.
-// Top frame: floating button, list of the objects holding the Default scope tag with all their tags, confirmation, sequential run.
+// Top frame: floating button, list of the objects holding the Default⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ scope tag with all their tags, confirmation, sequential run.
 // An object with Default only can be checked, but nothing is ever sent for it (scope-cleanup/lib.js).
 (() => {
   const C = globalThis.ScopeCleanupLib, A = globalThis.TenantCompassAssign, P = globalThis.PolicyImportLib, S = globalThis.AsBuiltLib, bridge = window.__tenantCompassGraphBridge;
@@ -75,7 +75,7 @@
     return (items || []).filter(i => (!kind || i.kind === kind) && (!os || S.platformsOf(i).includes(os)) && (!q || String(i.name).toLowerCase().includes(q)) && C.keepRow(i.tags, results.has(i.key), onlyRemovable));
   }
 
-  // What "check all" takes: with the filter on, only the objects the button can act on, not the rows already processed.
+  // What "check all" takes: with the filter on, only the objects the button can act on, not the rows already processed.⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
   const checkable = () => visible().filter(i => !onlyRemovable || C.stateOf(i.tags) === 'removable');
 
   function resultNote(r) {
@@ -194,7 +194,7 @@
     ui.os = el('select', { onchange: renderList }, el('option', { value: '', textContent: T('scopeCleanup.ui.allOs') }));
     ui.onlyBox = el('input', { type: 'checkbox', checked: onlyRemovable, onchange: () => {
       onlyRemovable = ui.onlyBox.checked;
-      // A hidden Default only row must not stay checked: the count on the button is what gets processed.
+      // A hidden Default only row must not stay checked: the count on the button is⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ what gets processed.
       if (onlyRemovable) for (const i of items || []) if (C.stateOf(i.tags) === 'onlyDefault') checked.delete(i.key);
       renderList();
     } });

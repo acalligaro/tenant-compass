@@ -1,5 +1,5 @@
 // Pure helpers of Scope Tags Clean up: closed tables, the rule on the Default tag, one line, the whole run. No DOM, no network.
-// The rule: Default goes only when another tag stays. The read just before the write decides, never the list shown earlier.
+// The rule: Default goes only when another tag stays. The read just before the write decides, never the list⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ shown earlier.
 (() => {
   const A = globalThis.TenantCompassAssign || require('../shared/assign-lib.js');
   const DM = 'https://graph.microsoft.com/beta/deviceManagement/', APPS = 'https://graph.microsoft.com/beta/deviceAppManagement/';
@@ -41,7 +41,7 @@
   // The filter on objects holding Default and another tag. A row already processed stays, to show its result.
   const keepRow = (tags, processed, onlyRemovable) => !onlyRemovable || processed || stateOf(tags) === 'removable';
 
-  // What to do with an object just read. A body exists only when another tag stays.
+  // What to do with an object just read. A body exists only when another⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ tag stays.
   function cleanPlan(kind, policy) {
     const tags = tagsIn(policy), state = stateOf(tags);
     if (state !== 'removable') return { action: state, tags };

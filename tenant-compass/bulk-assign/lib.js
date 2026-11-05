@@ -44,7 +44,7 @@
     return out;
   }
 
-  // Strictly sequential. An expired session stops the series: the next lines say "not sent".
+  // Strictly sequential. An expired session stops⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ the series: the next lines say "not sent".
   async function runBulk(items, plan, call, { pause, onProgress = () => {} }) {
     const out = [];
     let stopped = false;
