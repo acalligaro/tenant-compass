@@ -315,11 +315,23 @@ assert.strictEqual(L.scriptFiles('dc', { configurationXml: enc64(plist) })[0].ex
 assert.deepStrictEqual(L.scriptFiles('dc', { displayName: 'no custom body' }), []);
 assert.deepStrictEqual(L.scriptFiles('sc', { payload: enc64(plist) }), []);
 
+// Trusted certificates, on every OS: byte for byte what Graph holds, DER or PEM, always named .cer.
+const der = Buffer.from([0x30, 0x82, 0x01, 0x0a, 0xff, 0x00]);
+const pem = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n';
+for (const t of ['windows81', 'windowsPhone81', 'ios', 'macOS', 'android', 'androidForWork', 'androidWorkProfile', 'androidDeviceOwner', 'aospDeviceOwner']) {
+  const files = L.scriptFiles('dc', { '@odata.type': `#microsoft.graph.${t}TrustedRootCertificate`, certFileName: 'root.crt', trustedRootCertificate: der.toString('base64') });
+  assert.deepStrictEqual(files.map(f => [f.suffix, f.ext, [...f.bytes]]), [['', 'cer', [...der]]], t);
+}
+assert.strictEqual(bytesOf(L.scriptFiles('dc', { trustedRootCertificate: enc64(pem) })[0]), pem);
+assert.deepStrictEqual(L.scriptFiles('dc', { trustedRootCertificate: null }), []);
+assert.deepStrictEqual(L.propertyRows({ certFileName: 'root.cer', trustedRootCertificate: der.toString('base64') }).map(r => r.value), ['root.cer', '(certificat exporté dans un fichier séparé)']);
+
 // Documents: no base64 dump, the row points to the file. A nested "payload" is not a profile body.
 const profileRows = L.propertyRows({ payloadName: 'cato', payload: enc64(plist), configurationXml: enc64(plist), other: { payload: 'kept' } });
 assert.deepStrictEqual(profileRows.map(r => r.value), ['cato', '(profil exporté dans un fichier séparé)', '(profil exporté dans un fichier séparé)', 'kept']);
 document.documentElement.dataset.tenantCompassLang = 'en';
 assert.strictEqual(L.propertyRows({ payload: 'x' })[0].value, '(profile exported to a separate file)');
+assert.strictEqual(L.propertyRows({ trustedRootCertificate: 'x' })[0].value, '(certificate exported to a separate file)');
 assert.strictEqual(L.policySummary('cattr', { id: 'c', displayName: 'OS' }).type, 'macOS custom attribute');
 document.documentElement.dataset.tenantCompassLang = 'fr';
 

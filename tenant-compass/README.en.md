@@ -151,7 +151,7 @@ Tenant detection, by priority: URL (`tid=`, `tenantId=`, `ctid=`, `#@domain`), d
 ![As-Built Entra on the Conditional Access page: two Conditional Access policies and the Fido2 method checked at the top of the list, then authentication strengths and methods](docs/img/readme/en/17-as-built-entra.jpg)
 
 - Export mode: **One policy per file** (default) or all policies in a single file. **Copy MD** always copies a single Markdown block.
-- **Export scripts and profiles** (checked by default): downloads next to the document, decoded from Graph's Base64, the scripts (`.ps1`, `.sh`, `.zsh`), macOS custom attributes, remediations (detection + remediation), the PowerShell detection / requirement scripts of Win32 apps, the pre / post-install scripts of macOS PKG apps and custom profiles (`.mobileconfig`, `.plist` preference files). These files are exact copies, not masked: a secret written in a script or profile stays in clear text.
+- **Export scripts, profiles and certificates** (checked by default): downloads next to the document, decoded from Graph's Base64, the scripts (`.ps1`, `.sh`, `.zsh`), macOS custom attributes, remediations (detection + remediation), the PowerShell detection / requirement scripts of Win32 apps, the pre / post-install scripts of macOS PKG apps, custom profiles (`.mobileconfig`, `.plist` preference files) and trusted certificates of every OS (`.cer`, DER or PEM depending on the file uploaded to Intune). These files are exact copies, not masked: a secret written in a script or profile stays in clear text.
 - `.intunewin` files cannot be exported: Graph exposes no download URL for published app content (the storage URI only exists during upload, and the content is encrypted).
 
 ## Assignment Lens

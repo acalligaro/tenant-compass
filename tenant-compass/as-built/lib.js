@@ -195,6 +195,7 @@
       if (SECRET_KEYS.has(k)) { rows.push({ path, name, value: mask() }); continue; }
       if (SCRIPT_KEYS.has(k)) { rows.push({ path, name, value: T('asBuilt.value.scriptFile', '(script exporté dans un fichier séparé)') }); continue; }
       if (!path && PROFILE_KEYS.has(k)) { rows.push({ path, name, value: T('asBuilt.value.profileFile', '(profil exporté dans un fichier séparé)') }); continue; }
+      if (!path && k === 'trustedRootCertificate') { rows.push({ path, name, value: T('asBuilt.value.certFile', '(certificat exporté dans un fichier séparé)') }); continue; }
       if (Array.isArray(v) && typeof v[0] === 'object') v.forEach((o, i) => rows.push(...propertyRows(o, `${sub} [${i + 1}]`)));
       else if (Array.isArray(v)) rows.push({ path, name, value: v.join(', ') });
       else if (typeof v === 'object') rows.push(...propertyRows(v, sub));
@@ -415,6 +416,7 @@ ${body}
     if (kind === 'dc') {
       addBytes(policy.payload, 'mobileconfig');
       addBytes(policy.configurationXml, ext || 'plist');
+      addBytes(policy.trustedRootCertificate, 'cer'); // same field on the trusted certificate profile of every OS
     }
     if (kind === 'rem') {
       add(policy.detectionScriptContent, ' - detection', 'ps1');
