@@ -259,6 +259,7 @@
       host.id = 'assignment-lens';
       root = host.attachShadow({ mode: 'closed' });
       document.documentElement.appendChild(host);
+      window.__tenantCompassLayer?.('assignment-lens', host);
     }
     const style = h('style');
     style.textContent = CSS;
@@ -286,7 +287,8 @@
     const close = () => { collapsed = true; render(); };
     const title = h('span', 't', 'Assignment Lens');
     title.onclick = close; // a drag of the header swallows this click (shared/drag.js)
-    const header = h('header', null, title, btn('↻', T('refresh'), refresh), btn('×', T('collapse'), close));
+    const pin = window.__tenantCompassPin ? [window.__tenantCompassPin('assignment-lens')] : [];
+    const header = h('header', null, title, ...pin, btn('↻', T('refresh'), refresh), btn('×', T('collapse'), close));
     header.title = T('header.title');
     const panel = h('div', 'p', header, h('div', 'b', ...body()));
     root.replaceChildren(style, panel, fab);

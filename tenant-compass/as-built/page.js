@@ -345,6 +345,7 @@
     button.act:active:not(:disabled) { transform: scale(.97); }
     button.act.ghost { background: #eff6fc; color: #005a9e; }
     button.act:disabled { background: #e1dfdd; color: #a19f9d; cursor: default; }
+    .tools { display: flex; gap: 6px; }
     button.x { background: rgba(255,255,255,.15); color: #fff; border: 0; width: 28px; height: 28px; border-radius: 50%; font-size: 16px; cursor: pointer; }
     button.x:hover { background: rgba(255,255,255,.3); }
     .progress { height: 8px; border-radius: 999px; background: #edebe9; overflow: hidden; opacity: 0; transition: opacity .2s; }
@@ -368,6 +369,7 @@
     root.append(fab);
     ui.root = root;
     document.body.append(host);
+    window.__tenantCompassLayer?.('as-built', host);
     if (window.__tenantCompassDrag) window.__tenantCompassDrag(fab, fab, 'as-built-fab');
   }
 
@@ -400,7 +402,7 @@
       el('button', { className: 'act', textContent: 'JSON', onclick: () => run('json') }),
       el('button', { className: 'act ghost', textContent: T('asBuilt.ui.copyMd'), title: T('asBuilt.ui.copyMdTitle'), onclick: () => run('copy') }),
     ];
-    const head = el('div', { className: 'head', title: T('asBuilt.ui.drag') }, CONSOLE === 'intune' ? 'As-Built Intune' : 'As-Built Entra', el('button', { className: 'x', textContent: '×', title: T('asBuilt.ui.close'), onclick: toggle }));
+    const head = el('div', { className: 'head', title: T('asBuilt.ui.drag') }, CONSOLE === 'intune' ? 'As-Built Intune' : 'As-Built Entra', el('span', { className: 'tools' }, ...(window.__tenantCompassPin ? [window.__tenantCompassPin('as-built')] : []), el('button', { className: 'x', textContent: '×', title: T('asBuilt.ui.close'), onclick: toggle })));
     panel = el('div', { className: 'panel' },
       head,
       el('div', { className: 'bar' }, ui.all, ui.search),

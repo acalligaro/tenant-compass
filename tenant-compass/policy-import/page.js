@@ -74,6 +74,7 @@
     button.act:hover:not(:disabled) { background: #106ebe; }
     button.act.ghost { background: #eff6fc; color: #005a9e; }
     button.act:disabled { background: #e1dfdd; color: #a19f9d; cursor: default; }
+    .tools { display: flex; gap: 6px; }
     button.x { background: rgba(255,255,255,.15); color: #fff; border: 0; width: 28px; height: 28px; border-radius: 50%; font-size: 16px; cursor: pointer; }
     .progress { height: 8px; border-radius: 999px; background: #edebe9; overflow: hidden; display: none; }
     .progress.on { display: block; }
@@ -272,7 +273,7 @@
     ui.progress = el('div', { className: 'progress' }, ui.fill);
     ui.status = el('div', { className: 'status', textContent: lastStatus });
     ui.go = el('button', { className: 'act', onclick: askConfirm });
-    const head = el('div', { className: 'head', title: T('policyImport.ui.drag') }, T('policyImport.ui.title'), el('button', { className: 'x', textContent: '×', title: T('policyImport.ui.close'), onclick: toggle }));
+    const head = el('div', { className: 'head', title: T('policyImport.ui.drag') }, T('policyImport.ui.title'), el('span', { className: 'tools' }, ...(window.__tenantCompassPin ? [window.__tenantCompassPin('policy-import')] : []), el('button', { className: 'x', textContent: '×', title: T('policyImport.ui.close'), onclick: toggle })));
     panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.prefix), options, el('div', { className: 'bar' }, ui.all, ui.pick),
       ui.list, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
     ui.root.append(panel);
@@ -296,6 +297,7 @@
     const fab = el('button', { className: 'fab', textContent: T('policyImport.ui.fab'), title: T('policyImport.ui.fabTitle'), onclick: toggle });
     ui.root.append(fab);
     document.body.append(host);
+    window.__tenantCompassLayer?.('policy-import', host);
     if (window.__tenantCompassDrag) window.__tenantCompassDrag(fab, fab, 'policy-import-fab');
   }
 

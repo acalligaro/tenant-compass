@@ -3,11 +3,41 @@
 (() => {
   // One panel at a time (As-Built, Assignment Lens): opening one closes the others in this page.⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
   // __tenantCompassExclusive(id, close) registers `close` and returns opened(), to call when panel `id` opens.
+  // A pinned panel stays open: __tenantCompassPin(id) gives the pin button of its head (pin kept for the page's life).
+  // __tenantCompassLayer(id, host): the panel opened or clicked last comes above the other Tenant Compass panels.
   if (!window.__tenantCompassExclusive) {
-    const EVT = 'tenant-compass:panel-open';
+    const EVT = 'tenant-compass:panel-open', pinned = new Set(), hosts = new Map();
+    const T = k => (globalThis.__tenantCompassI18n ? globalThis.__tenantCompassI18n.t(k) : k);
+    globalThis.__tenantCompassI18n?.add({
+      fr: { 'panel.pin': 'Épingler : la fenêtre reste ouverte quand un autre module s\'ouvre', 'panel.unpin': 'Désépingler' },
+      en: { 'panel.pin': 'Pin: the window stays open when another module opens', 'panel.unpin': 'Unpin' },
+    });
+    // Each host is its own stacking context: a panel stays under its own dialogs, and one host above the others.
+    const front = id => { for (const [k, h] of hosts) h.style.zIndex = k === id ? '2147483001' : '2147483000'; };
+    window.__tenantCompassLayer = (id, host) => {
+      hosts.set(id, host);
+      Object.assign(host.style, { position: 'relative', zIndex: '2147483000' });
+      host.addEventListener('pointerdown', () => front(id), true);
+    };
     window.__tenantCompassExclusive = (id, close) => {
-      window.addEventListener(EVT, e => { if (e.detail !== id) close(); });
-      return () => window.dispatchEvent(new CustomEvent(EVT, { detail: id }));
+      window.addEventListener(EVT, e => { if (e.detail !== id && !pinned.has(id)) close(); });
+      return () => { front(id); window.dispatchEvent(new CustomEvent(EVT, { detail: id })); };
+    };
+    window.__tenantCompassPin = id => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'x'; // round button of the panel heads
+      b.textContent = '📌';
+      const show = () => {
+        const on = pinned.has(id);
+        b.title = T(on ? 'panel.unpin' : 'panel.pin');
+        b.setAttribute('aria-label', b.title);
+        b.setAttribute('aria-pressed', String(on));
+        Object.assign(b.style, { opacity: on ? '1' : '.6', boxShadow: on ? 'inset 0 0 0 2px #fff' : 'none' });
+      };
+      b.onclick = () => { if (!pinned.delete(id)) pinned.add(id); show(); };
+      show();
+      return b;
     };
   }
   if (window.__tenantCompassDrag) return;
