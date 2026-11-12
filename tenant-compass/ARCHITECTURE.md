@@ -1,6 +1,6 @@
 # Tenant Compass : architecture
 
-Document destiné aux mainteneurs. Il décrit ce que fait réellement le code de `tenant-compass/` (version `0.11.0` du manifeste). Les points non confirmés par la lecture du code sont marqués **à vérifier**.
+Document destiné aux mainteneurs. Il décrit ce que fait réellement le code de `tenant-compass/` (version `0.13.0` du manifeste). Les points non confirmés par la lecture du code sont marqués **à vérifier**.
 
 ---
 
@@ -48,7 +48,8 @@ tenant-compass/
 ├── icons/icon{16,32,48,128}.png  Icônes
 ├── docs/img/readme/{fr,en}/        Captures du README (01 à 16) en français et en anglais, prises dans un tenant de test anonymisé (Contoso)
 ├── shared/
-│   ├── drag.js                   Déplacement à la souris + mémorisation de position (MAIN world)
+│   ├── drag.js                   Déplacement à la souris + mémorisation de position, un panneau à la fois, épingle (MAIN world)
+│   ├── test.js                   Tests Node de drag.js (épingle, premier plan)
 │   ├── graph-bridge.js           Policy Import, Bulk Assignment, Scope Tags Clean up : jeton observé, relais entre frames, opérations fermées (MAIN world)
 │   ├── assign-lib.js             Fonctions pures : cibles, corps de /assign, fusion avec l'existant, scope tags, recherche de groupes
 │   ├── assign-form.js            Formulaire commun : cible, filtre, scope tags (MAIN world)
@@ -576,6 +577,8 @@ Les paramètres `l=` et `mkt=` sont des comportements **observés**, **non docum
 
 La liste réutilise `policySummary` et les libellés d'As-Built, et les règles de jeton de Policy Import : chaque fichier ne s'exécute qu'une fois par frame, que ces fonctions soient actives ou non.
 
+**Liste, filtres et survol.** Chaque type est lu avec `$expand=assignments` et `roleScopeTagIds` (`listUrl(kind, true)`). Si Graph refuse, relecture de la liste simple (`loadKind`) : ses objets n'ont pas d'affectations (`null`), la ligne d'état nomme le type, et ils ne sortent pas quand un groupe ou un filtre est choisi. Une liste d'affectations incomplète (`assignments@odata.nextLink`) compte comme non lue. Trois listes déroulantes, alimentées par ce que les lignes contiennent (`facets`) : groupe affecté (inclus ou exclu, `allUsers`, `allDevices`, via `targetRef`), filtre d'affectation, scope tag. Groupe et filtre doivent figurer sur la même affectation (`matches`). Le survol d'une ligne (`title`) liste ses affectations (inclus, exclu ou type de déploiement, filtre) et ses scope tags. Noms : `tags` et `filters` du pont, groupes par lots de 15 ID via l'opération `groupNames` (`groups?$filter=id in (…)&$select=id,displayName`, URL fermée : GUID seulement, `groupNamesUrl`) ; un lot refusé laisse les ID. Après une série, `afterRun` ajoute aux lignes ce qui vient d'être appliqué, sans relire les listes.
+
 **Pont commun (`shared/graph-bridge.js`).** Fabrique appelée une fois par fonction, avec son canal `postMessage`, ses types et ses opérations. Elle observe le jeton (par type, en mémoire), trouve la frame qui le détient, et relaie `call` avec un **nom d'opération**, jamais une URL. Une écriture porte le `tid` confirmé et le pont la refuse si le jeton n'y correspond plus. Les URL viennent des tables fermées de `shared/assign-lib.js`.
 
 **Flux d'une ligne (`applyLine`).**
@@ -594,7 +597,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 **UI.** Hôte `#bulk-assign`, Shadow DOM fermé. Comme pour Policy Import, le garde-clic de Tenant Guard ne voit pas ces boutons : le dialogue de confirmation fait office de garde, et OK reste un seul clic, y compris sur un tenant PROD (choix de l'utilisateur du 2026-11-05).
 
-**Tests.** `bulk-assign/test.js` : tables fermées, cibles, fusion, ensembles de stratégies, scope tags, recherche de groupes, ligne (lecture refusée ou partielle, déjà en place, filtre sur script), série (`429`, `401`), clés i18n, `bulkAssign: false` dans les deux `DEFAULTS`, contrôles statiques (un seul `POST` et un seul `PATCH` dans le pont, aucune écriture dans `page.js`).
+**Tests.** `bulk-assign/test.js` : tables fermées, liste enrichie et repli, `targetRef`, `matches`, `facets`, `groupNamesUrl` (GUID seulement, lots de 15), `groupNames`, `afterRun`, cibles, fusion, ensembles de stratégies, scope tags, recherche de groupes, ligne (lecture refusée ou partielle, déjà en place, filtre sur script), série (`429`, `401`), clés i18n, `bulkAssign: false` dans les deux `DEFAULTS`, contrôles statiques (un seul `POST` et un seul `PATCH` dans le pont, aucune écriture dans `page.js`).
 
 ### 4.10 Scope Tags Clean up
 
@@ -618,11 +621,13 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 **Journal.** Change Snapshot observe les `PATCH` sur les stratégies, sans carte par objet. `mobileApps` n'est pas dans ses collections : les changements sur les applications n'y figurent pas.
 
+**Export JSON.** Bouton « Exporter (JSON) » : télécharge les objets cochés (`exportRows` : `id`, `name`, `type`, `platforms`, `scopeTags` en `{ id, name }`), tels qu'affichés, sans lecture Graph. Fichier `scope-cleanup-AAAA-MM-JJ-HH-MM.json` par lien `blob:`, comme As-Built.
+
 **Stockage.** Aucun. Positions : `scope-cleanup-fab`, `scope-cleanup-panel`.
 
 **UI.** Hôte `#scope-cleanup`, Shadow DOM fermé. Le dialogue de confirmation fait office de garde : OK reste un seul clic, y compris sur un tenant PROD.
 
-**Tests.** `scope-cleanup/test.js` : règle sur Default (jamais de liste vide), tables fermées, droits par type, relecture sans `$select`, lecture un par un, ligne (Default seul, liste périmée, lecture refusée, `5xx`), série (`429`, `401`), clés i18n, `scopeCleanup: false` dans les deux `DEFAULTS`, contrôles statiques.
+**Tests.** `scope-cleanup/test.js` : règle sur Default (jamais de liste vide), tables fermées, droits par type, relecture sans `$select`, lecture un par un, ligne (Default seul, liste périmée, lecture refusée, `5xx`), série (`429`, `401`), `exportRows`, clés i18n, `scopeCleanup: false` dans les deux `DEFAULTS`, contrôles statiques.
 
 ---
 
@@ -679,11 +684,15 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 | Texte / atténué | `#1b1a19` / `#605e5c` |
 | Police | `"Segoe UI Variable", "Segoe UI", system-ui, sans-serif`, 13 px (12 px dans la carte Setting Inspector) |
 | Rayons | boutons flottants `999px` ; panneaux As-Built / Assignment Lens et carte Change Snapshot `16px` ; cartes du popup et du journal `14px` ; carte Setting Inspector `12px` ; boutons et champs `9–10px` |
-| z-index | `2147483000` (panneaux), `2147483646–2147483647` (bandeau Tenant Guard, modale, carte Setting Inspector, dialogue Change Snapshot) |
+| z-index | `2147483000` / `2147483001` sur l'hôte de chaque panneau (celui ouvert ou cliqué en dernier au-dessus), `2147483000–2147483002` dedans (bouton, panneau, dialogue), `2147483646–2147483647` (bandeau Tenant Guard, modale, carte Setting Inspector, dialogue Change Snapshot) |
 
 Toutes les UI injectées vivent dans un Shadow DOM (`:host { all: initial; color-scheme: light; }` pour As-Built et Setting Inspector).
 
-**`shared/drag.js`** (MAIN world, chargé par As-Built et Assignment Lens, garde `window.__tenantCompassDrag` contre le double chargement) :
+**`shared/drag.js`** (MAIN world, chargé par As-Built, Assignment Lens, Policy Import, Bulk Assignment et Scope Tags Clean up, garde `window.__tenantCompassDrag` contre le double chargement) :
+
+- `window.__tenantCompassExclusive(id, close)` : un panneau à la fois. Renvoie `opened()`, à appeler à l'ouverture : il ferme les autres panneaux **non épinglés** et passe celui-ci au premier plan.
+- `window.__tenantCompassPin(id)` : bouton 📌 de l'en-tête (`aria-pressed`). Un panneau épinglé ignore la fermeture par un autre module. L'épingle vit en mémoire, pour la vie de la page, et survit à la fermeture du panneau par ×.
+- `window.__tenantCompassLayer(id, host)` : l'hôte devient un contexte d'empilement (`position: relative`, `z-index` 2147483000 ou 2147483001). Un `pointerdown` dans l'hôte le passe au premier plan ; les dialogues restent au-dessus de leur panneau. Testé par `shared/test.js`.
 
 - `window.__tenantCompassDrag(el, handle, key)` : applique la position mémorisée (bornée à la fenêtre), rend `handle` déplaçable par pointer events. Sous 4 px de mouvement, c'est un clic. Après un vrai glissement, le clic suivant est avalé pour ne pas basculer le panneau. Les boutons internes au handle gardent leur clic.
 - Position stockée dans le `localStorage` **de la page portail** (donc par origine : `intune.microsoft.com` et `endpoint.microsoft.com` ont des positions distinctes), clé `tenant-compass:pos:<key>`, valeur `{ x, y }` en pixels.
@@ -832,6 +841,7 @@ Tirées des commentaires `ponytail:` et du `README.md`.
 | `policy-import/lib.js` | Seul le format d'export As-Built est lu : ni export natif du catalogue, ni fichiers OpenIntuneBaseline | Ajouter une détection de forme et l'UTF-16 si le besoin apparaît |
 | `policy-import/lib.js` | Secrets rendus nuls par Graph : seule la clé Wi-Fi est détectée. Liens facultatifs perdus sans blocage : certificat PKINIT de l'extension SSO, `privacyAccessControls` Windows | Étendre `hasSecret` et `CERT_LINKED` si un type est signalé |
 | `policy-import` | Hors V1 : ADMX (création en deux temps), applications, inscription, rôles, balises, mise à jour d'un objet existant, saisie des secrets | Au cas par cas |
+| `bulk-assign` | Noms de groupes lus par lots de 15, l'un après l'autre : quelques secondes sur un tenant avec des centaines de groupes affectés | Lots en parallèle si cela se voit |
 | `bulk-assign` | Ajout seulement : ni retrait d'affectation, ni exclusion, ni remplacement du tag Default. Remédiations (planning) non prises en charge. Applications : un seul réglage de déploiement par série, pas de piste de test Google Play ni de réglages par plateforme. Le type du groupe (utilisateurs ou appareils) n'est pas contrôlé : Graph tranche | Ajouter un mode et ces champs si le besoin apparaît |
 | `bulk-assign` | Pas de vérification préalable de la plateforme d'un filtre : Graph refuse la ligne et son message s'affiche | Filtrer la liste par plateforme |
 | `scope-cleanup` | Change Snapshot ne suit pas `mobileApps` : le retrait sur une application n'est pas journalisé. L'ajouter ferait aussi journaliser les envois de contenu d'applications | L'ajouter limité à `mobileApps/{id}` si le besoin apparaît |

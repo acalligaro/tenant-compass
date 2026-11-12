@@ -329,12 +329,14 @@ Graph valide chaque objet à la création : un type de profil rare peut être re
 
 Comme As-Built, elle liste vos stratégies. Au lieu de les exporter, elle leur ajoute une affectation et des scope tags, en une seule fois.
 
-1. Cliquer sur **Bulk Assign**, puis cocher les stratégies (recherche, filtres par type et par OS).
+1. Cliquer sur **Bulk Assign**, puis cocher les stratégies (recherche, filtres par type, par OS, par groupe affecté, par filtre d'affectation et par scope tag). Le survol d'une ligne affiche ses affectations et ses scope tags.
 2. Choisir une cible : un groupe Entra ID (recherche par nom, ou ID collé), **Tous les utilisateurs** ou **Tous les appareils**. En option : un filtre d'affectation, en inclusion ou en exclusion, et des scope tags.
 3. Cliquer sur **Appliquer (n)**, vérifier le tenant, la cible et le nombre de stratégies, puis cliquer sur **OK**.
 
 **Pris en charge** : catalogue de paramètres, profils de configuration, conformité, modèles d'administration (ADMX), scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, applications. Pas les remédiations (planning à choisir).
 
+- **Filtres de la liste** : **Groupe affecté** montre les stratégies qui visent ce groupe, en inclusion ou en exclusion (ainsi que **Tous les utilisateurs** et **Tous les appareils**). **Filtre** montre celles dont une affectation utilise ce filtre d'affectation. **Scope tag** montre celles qui portent ce scope tag. Avec un groupe et un filtre, les deux doivent figurer sur la même affectation. Si Graph refuse la liste avec ses affectations pour un type, la liste simple est utilisée et la ligne d'état nomme ce type : ses stratégies n'apparaissent alors pas quand un groupe ou un filtre est choisi.
+- **Survol** : chaque ligne affiche ses affectations (inclus, exclu, ou type de déploiement pour une application, avec le filtre éventuel) et ses scope tags, tels que lus avec la liste. Après **Appliquer**, la ligne montre ce qui vient d'être ajouté.
 - **Ajout seulement** : Graph remplace toutes les affectations d'un objet à chaque envoi. L'extension relit donc les affectations existantes et les renvoie avec la nouvelle. Si cette lecture échoue ou est incomplète, rien n'est envoyé. Aucune affectation ni aucun scope tag n'est retiré.
 - **Déjà en place** : si le groupe est déjà affecté ou exclu, ou si la même cible existe déjà, rien n'est envoyé, même avec un autre filtre. Un groupe exclu n'est jamais transformé en inclusion.
 - **Applications** : dès qu'une application est cochée, choisissez son type de déploiement : **Requis**, **Disponible pour les appareils inscrits**, **Disponible avec ou sans inscription** (Android et iOS) ou **Désinstaller**. Il n'y a pas de valeur par défaut. Une application système Android Enterprise n'accepte que Requis ou Désinstaller. Les affectations existantes gardent leur type et leurs réglages, et un groupe ne prend qu'un seul type. Une application Managed Google Play reçoit la mise à jour automatique par défaut.
@@ -358,6 +360,8 @@ Comme As-Built, elle affiche une liste. Celle-ci montre chaque stratégie et app
 1. Cliquer sur **Scope Tags**, puis cocher les objets (recherche, filtres par type et par OS).
 2. Cliquer sur **Retirer Default (n)**, vérifier le tenant et le nombre d'objets, puis cliquer sur **OK**.
 
+**Exporter (JSON)** télécharge la liste des objets cochés, sans rien modifier : ID, nom, type, OS et scope tags (ID et nom) de chacun, tels qu'affichés dans la liste.
+
 **Pris en charge** : catalogue de paramètres, profils de configuration, conformité, modèles d'administration (ADMX), scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, remédiations, applications.
 
 - **Sélection rapide** : la case **Seulement Default + un autre scope tag** ne garde que les objets à nettoyer. La case **Tout cocher** les prend alors tous d'un coup.
@@ -374,9 +378,11 @@ Comme As-Built, elle affiche une liste. Celle-ci montre chaque stratégie et app
 
 ## Déplacement
 
-As-Built, Assignment Lens, Policy Import, Bulk Assignment et Scope Tags Clean up ne s'ouvrent pas en même temps : ouvrir l'un referme les autres.
+As-Built, Assignment Lens, Policy Import, Bulk Assignment et Scope Tags Clean up ne s'ouvrent pas en même temps : ouvrir l'un referme les autres, sauf ceux épinglés.
 
-Les boutons et panneaux d'As-Built et d'Assignment Lens se déplacent à la souris (bouton : glisser ; panneau : glisser l'en-tête). Position mémorisée par élément dans le `localStorage` du portail (clés `tenant-compass:pos:*`), code commun dans `shared/drag.js`. Bouton **Positions par défaut** dans le menu : efface ces clés dans l'onglet actif et le recharge.
+**Épingler** : le bouton 📌 de l'en-tête garde le panneau ouvert quand un autre module s'ouvre. Cliquer à nouveau dessus le désépingle, et **×** le ferme toujours. L'épingle dure jusqu'au rechargement de la page. Le panneau ouvert ou cliqué en dernier passe au-dessus des autres.
+
+Les boutons et panneaux de ces cinq modules se déplacent à la souris (bouton : glisser ; panneau : glisser l'en-tête). Position mémorisée par élément dans le `localStorage` du portail (clés `tenant-compass:pos:*`), code commun dans `shared/drag.js`. Bouton **Positions par défaut** dans le menu : efface ces clés dans l'onglet actif et le recharge.
 
 ## Fonctionnement
 
@@ -404,6 +410,7 @@ cd ../portal-language && node test.js
 cd ../policy-import && node test.js
 cd ../bulk-assign && node test.js
 cd ../scope-cleanup && node test.js
+cd ../shared && node test.js
 ```
 
 ## Licence

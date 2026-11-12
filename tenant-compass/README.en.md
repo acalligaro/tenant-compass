@@ -327,12 +327,14 @@ Graph validates each object on creation: a rare profile type may be refused, and
 
 Like As-Built, it lists your policies. Instead of exporting them, it adds an assignment and scope tags to them, in one go.
 
-1. Click **Bulk Assign**, then check the policies (search, filters by type and OS).
+1. Click **Bulk Assign**, then check the policies (search, filters by type, OS, assigned group, assignment filter and scope tag). Hovering a row shows its assignments and scope tags.
 2. Choose a target: an Entra ID group (search by name, or pasted ID), **All users** or **All devices**. As options: an assignment filter, included or excluded, and scope tags.
 3. Click **Apply (n)**, check the tenant, the target and the number of policies, then click **OK**.
 
 **Supported**: settings catalog, configuration profiles, compliance, administrative templates (ADMX), PowerShell scripts, macOS shell scripts, macOS custom attributes, apps. Not remediations (a schedule to choose).
 
+- **List filters**: **Assigned group** shows the policies that target this group, included or excluded (as well as **All users** and **All devices**). **Filter** shows those with an assignment using this assignment filter. **Scope tag** shows those holding this scope tag. With a group and a filter, both must be on the same assignment. If Graph refuses the list with its assignments for a type, the plain list is used and the status line names that type: its policies then do not show when a group or a filter is chosen.
+- **Hover**: each row shows its assignments (included, excluded, or deployment type for an app, with its filter if any) and its scope tags, as read with the list. After **Apply**, the row shows what was just added.
 - **Adds only**: Graph replaces every assignment of an object on each call. The extension therefore reads the existing assignments and sends them back with the new one. If that read fails or is incomplete, nothing is sent. No assignment and no scope tag is removed.
 - **Already in place**: if the group is already assigned or excluded, or if the same target already exists, nothing is sent, even with another filter. An excluded group is never turned into an inclusion.
 - **Apps**: as soon as an app is checked, choose its deployment type: **Required**, **Available for enrolled devices**, **Available with or without enrollment** (Android and iOS) or **Uninstall**. There is no default. An Android Enterprise system app takes only Required or Uninstall. Existing assignments keep their type and settings, and a group takes a single type. A Managed Google Play app gets the default auto-update mode.
@@ -356,6 +358,8 @@ Like As-Built, it shows a list. This one shows each policy and app holding the D
 1. Click **Scope Tags**, then check the objects (search, filters by type and OS).
 2. Click **Remove Default (n)**, check the tenant and the number of objects, then click **OK**.
 
+**Export (JSON)** downloads the list of checked objects, without changing anything: ID, name, type, OS and scope tags (ID and name) of each, as shown in the list.
+
 **Supported**: settings catalog, configuration profiles, compliance, administrative templates (ADMX), PowerShell scripts, macOS shell scripts, macOS custom attributes, remediations, apps.
 
 - **Quick selection**: the **Only Default + another scope tag** box keeps only the objects to clean. The **check all** box then takes them all at once.
@@ -372,9 +376,11 @@ Like As-Built, it shows a list. This one shows each policy and app holding the D
 
 ## Moving panels
 
-As-Built, Assignment Lens, Policy Import, Bulk Assignment and Scope Tags Clean up do not open at the same time: opening one closes the others.
+As-Built, Assignment Lens, Policy Import, Bulk Assignment and Scope Tags Clean up do not open at the same time: opening one closes the others, except the pinned ones.
 
-The As-Built and Assignment Lens buttons and panels can be moved with the mouse (button: drag; panel: drag the header). The position is stored per element in the portal's `localStorage` (`tenant-compass:pos:*` keys), shared code in `shared/drag.js`. The **Reset positions** button in the menu clears these keys in the active tab and reloads it.
+**Pin**: the 📌 button in the header keeps the panel open when another module opens. Click it again to unpin; **×** always closes the panel. The pin lasts until the page reloads. The panel opened or clicked last comes above the others.
+
+The buttons and panels of these five modules can be moved with the mouse (button: drag; panel: drag the header). The position is stored per element in the portal's `localStorage` (`tenant-compass:pos:*` keys), shared code in `shared/drag.js`. The **Reset positions** button in the menu clears these keys in the active tab and reloads it.
 
 ## How it works
 
@@ -402,6 +408,7 @@ cd ../portal-language && node test.js
 cd ../policy-import && node test.js
 cd ../bulk-assign && node test.js
 cd ../scope-cleanup && node test.js
+cd ../shared && node test.js
 ```
 
 ## License
