@@ -146,6 +146,13 @@ for (const r of [{}, { roleScopeTagIds: [] }, { roleScopeTagIds: null }, null]) 
   await C.runClean(items, 'T', f.call, { ...opts, onProgress: (i, res) => seen.push([i, res.status]) });
   assert.deepStrictEqual(seen, [[0, 'onlyDefault'], [1, 'onlyDefault']]);
 
+  // JSON export: the checked rows only, with tag names, nothing read from Graph
+  const names = id => ({ '0': 'Default', '7': 'Paris' })[id] || id;
+  assert.deepStrictEqual(C.exportRows([{ kind: 'dc', key: 'dc:1', id: '1', name: 'Wi-Fi', type: 'Profil', platforms: ['Windows'], tags: ['0', '7', '9'], description: 'x' }], names),
+    [{ id: '1', name: 'Wi-Fi', type: 'Profil', platforms: ['Windows'], scopeTags: [{ id: '0', name: 'Default' }, { id: '7', name: 'Paris' }, { id: '9', name: '9' }] }]);
+  assert.deepStrictEqual(C.exportRows([{ id: '2', name: 'App', type: 'App', tags: null }], names), [{ id: '2', name: 'App', type: 'App', platforms: [], scopeTags: [] }]);
+  assert.deepStrictEqual(C.exportRows([], names), []);
+
   // i18n: same keys in both languages, every key used by the code exists
   const dicts = {};
   globalThis.__tenantCompassI18n = { add: d => { for (const l of ['fr', 'en']) dicts[l] = { ...dicts[l], ...d[l] }; } };

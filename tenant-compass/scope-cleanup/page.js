@@ -48,6 +48,7 @@
     button.act.ghost { background: #eff6fc; color: #005a9e; }
     button.act:disabled { background: #e1dfdd; color: #a19f9d; cursor: default; }
     .tools { display: flex; gap: 6px; }
+    .foot .btns { display: flex; gap: 8px; }
     button.x { background: rgba(255,255,255,.15); color: #fff; border: 0; width: 28px; height: 28px; border-radius: 50%; font-size: 16px; cursor: pointer; }
     .progress { height: 8px; border-radius: 999px; background: #edebe9; overflow: hidden; display: none; }
     .progress.on { display: block; }
@@ -104,6 +105,7 @@
     const n = selected().length;
     ui.go.textContent = T('scopeCleanup.ui.go', { n });
     ui.go.disabled = running || !n;
+    ui.export.disabled = !n;
     ui.onlyBox.disabled = running;
     ui.onlyText.textContent = T('scopeCleanup.ui.onlyRemovable', { n: (items || []).filter(i => C.stateOf(i.tags) === 'removable').length });
     const shown = checkable();
@@ -136,6 +138,19 @@
       ...(errors.length ? [T('scopeCleanup.status.source', { list: errors.join(', ') })] : []),
       ...(missing.length ? [T('scopeCleanup.status.noScope', { list: missing.map(k => T('asBuilt.src.' + k)).join(', ') })] : [])].join(' · '));
     renderList();
+  }
+
+  // The rows checked, as they are in the list. No Graph read: the file says what the user saw.
+  function exportSelected() {
+    const rows = C.exportRows(selected().map(i => ({ ...i, platforms: S.platformsOf(i) })), tagName);
+    if (!rows.length) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' }));
+    const a = el('a', { href: url, download: `scope-cleanup-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    setStatus(T('scopeCleanup.status.exported', { n: rows.length }));
   }
 
   function askConfirm() {
@@ -205,9 +220,10 @@
     ui.progress = el('div', { className: 'progress' }, ui.fill);
     ui.status = el('div', { className: 'status', textContent: lastStatus });
     ui.go = el('button', { className: 'act', disabled: true, textContent: T('scopeCleanup.ui.go', { n: 0 }), onclick: askConfirm });
+    ui.export = el('button', { className: 'act ghost', disabled: true, textContent: T('scopeCleanup.ui.export'), title: T('scopeCleanup.ui.exportTitle'), onclick: exportSelected });
     const head = el('div', { className: 'head', title: T('scopeCleanup.ui.drag') }, T('scopeCleanup.ui.title'), el('span', { className: 'tools' }, ...(window.__tenantCompassPin ? [window.__tenantCompassPin('scope-cleanup')] : []), el('button', { className: 'x', textContent: '×', title: T('scopeCleanup.ui.close'), onclick: toggle })));
     panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.all, ui.search),
-      el('div', { className: 'bar' }, ui.type, ui.os), el('div', { className: 'bar' }, el('label', { className: 'opt' }, ui.onlyBox, ui.onlyText)), ui.list, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
+      el('div', { className: 'bar' }, ui.type, ui.os), el('div', { className: 'bar' }, el('label', { className: 'opt' }, ui.onlyBox, ui.onlyText)), ui.list, el('div', { className: 'foot' }, ui.progress, ui.status, el('div', { className: 'btns' }, ui.export, ui.go)));
     ui.root.append(panel);
     opened();
     if (window.__tenantCompassDrag) window.__tenantCompassDrag(panel, head, 'scope-cleanup-panel');

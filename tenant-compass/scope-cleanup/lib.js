@@ -50,6 +50,10 @@
     return { action: 'remove', tags, body: { ...(KINDS.get(kind)?.typed ? { '@odata.type': type } : {}), roleScopeTagIds: tags.filter(t => t !== DEFAULT) } };
   }
 
+  // The rows checked, for the JSON export: identity, type, OS and scope tags (ID and name), nothing else.
+  const exportRows = (items, tagName) => items.map(i => ({ id: i.id, name: i.name, type: i.type, platforms: i.platforms || [],
+    scopeTags: (i.tags || []).map(id => ({ id, name: tagName(id) })) }));
+
   // ---------- reading ----------
 
   const ok = r => r.status >= 200 && r.status < 300;
@@ -103,7 +107,7 @@
     return out;
   }
 
-  const api = { KINDS: [...KINDS.keys()], DEFAULT, itemUrl, listUrl, kindsFor, tagsIn, stateOf, keepRow, cleanPlan, loadKind, resolveTags, cleanLine, runClean };
+  const api = { KINDS: [...KINDS.keys()], DEFAULT, itemUrl, listUrl, kindsFor, tagsIn, stateOf, keepRow, cleanPlan, exportRows, loadKind, resolveTags, cleanLine, runClean };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.ScopeCleanupLib = api; // always: a stray `module` global must not hide the lib from the page
 })();
