@@ -62,7 +62,7 @@
       const filterId = mode.value !== 'none' && filters ? filter.value : '';
       const target = A.targetOf({ mode: mode.value, groupId: group.value, filterId, filterMode: filterMode.value });
       const names = [mode.value === 'group' ? label(group) : label(mode), ...(filterId ? [`${label(filter)}, ${label(filterMode)}`] : [])];
-      return { target, complete: mode.value === 'none' || !!target, describe: names.join(' · '), tagIds: selected(tags), tagNames: [...tags.selectedOptions].map(o => o.textContent) };
+      return { target, complete: mode.value === 'none' || !!target, describe: names.join(' · '), groupName: mode.value === 'group' ? label(group) : '', tagIds: selected(tags), tagNames: [...tags.selectedOptions].map(o => o.textContent) };
     }
 
     sync();

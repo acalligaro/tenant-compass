@@ -12,7 +12,9 @@
     const i = P.tokenInfo(t), mobile = P.tokenScopes(t).scopes.includes('DeviceManagementApps.ReadWrite.All');
     return { tid: i.tid, kinds: i.kinds.length || mobile ? [...i.kinds.filter(A.assignable), ...(i.kinds.includes('dc') ? ['admx'] : []), ...(mobile ? ['app'] : []), 'meta'] : [] };
   };
-  const graph = bridge({ channel: 'bulkAssign', info, jwtsIn: P.jwtsIn, ops: { ...bridge.assignOps(A), list: (token, kind) => bridge.readAll(B.listUrl(kind), token) } });
+  const graph = bridge({ channel: 'bulkAssign', info, jwtsIn: P.jwtsIn, ops: { ...bridge.assignOps(A),
+    list: (token, kind, { rich } = {}) => bridge.readAll(B.listUrl(kind, !!rich), token),
+    groupNames: (token, kind, { ids } = {}) => bridge.readAll(B.groupNamesUrl(ids), token) } });
   if (!graph) return;
 
   const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
@@ -62,6 +64,7 @@
   `);
 
   let panel = null, poll = 0, running = false, items = null, lastStatus = '', form = null;
+  const names = { groups: new Map(), filters: new Map(), tags: new Map() }; // ID -> display name, for the filters and the tooltip
   const checked = new Set(), results = new Map(), ui = {};
 
   const directoryName = () => document.querySelector('.fxs-avatarmenu-tenant')?.textContent.trim() || '';
@@ -69,8 +72,39 @@
   function setStatus(text) { lastStatus = text; if (panel) ui.status.textContent = text; }
 
   function visible() {
-    const q = ui.search.value.trim().toLowerCase(), kind = ui.type.value, os = ui.os.value;
-    return (items || []).filter(i => (!kind || i.kind === kind) && (!os || S.platformsOf(i).includes(os)) && (!q || String(i.name).toLowerCase().includes(q)));
+    const q = ui.search.value.trim().toLowerCase(), kind = ui.type.value, os = ui.os.value, by = { group: ui.group.value, filter: ui.filter.value, tag: ui.tag.value };
+    return (items || []).filter(i => (!kind || i.kind === kind) && (!os || S.platformsOf(i).includes(os)) && (!q || String(i.name).toLowerCase().includes(q)) && B.matches(i, by));
+  }
+
+  const groupLabel = ref => (ref === 'allUsers' ? T('assignForm.allUsers') : ref === 'allDevices' ? T('assignForm.allDevices') : names.groups.get(ref) || ref);
+  const tagLabel = id => names.tags.get(id) || id;
+
+  // Tooltip of a row: its assignments (deployment type for an app, filter) and its scope tags, as read with the list.
+  function assignmentText(a) {
+    const t = a?.target || {}, ref = B.targetRef(t), f = B.filterOf(t);
+    const mode = B.isExclusion(t) ? T('bulkAssign.hover.excluded') : INTENTS[a?.intent] ? T(INTENTS[a.intent]) : T('bulkAssign.hover.included');
+    const target = ref ? groupLabel(ref) : String(t['@odata.type'] || '?').replace('#microsoft.graph.', '');
+    const filter = f ? ' · ' + T('bulkAssign.hover.filter', { name: names.filters.get(f) || f, mode: T(t.deviceAndAppManagementAssignmentFilterType === 'exclude' ? 'assignForm.exclude' : 'assignForm.include') }) : '';
+    return '• ' + T('bulkAssign.hover.line', { mode, target }) + filter;
+  }
+  function hoverText(i) {
+    const head = !i.assignments ? [T('bulkAssign.hover.unread')] : !i.assignments.length ? [T('bulkAssign.hover.none')] : [T('bulkAssign.hover.title'), ...i.assignments.map(assignmentText)];
+    return [...head, ...(i.tags ? [T('bulkAssign.hover.tags', { tags: i.tags.map(tagLabel).join(', ') })] : [])].join('\n');
+  }
+
+  // Choices of the three filters, from the rows. A choice that no row holds any more goes back to "any".
+  function fillFacets() {
+    if (!panel || !items) return;
+    const f = B.facets(items);
+    const fill = (select, anyKey, ids, label) => {
+      const keep = select.value;
+      select.replaceChildren(el('option', { value: '', textContent: T(anyKey) }),
+        ...ids.map(id => [id, label(id)]).sort((a, b) => a[1].localeCompare(b[1], 'fr')).map(([value, textContent]) => el('option', { value, textContent })));
+      select.value = ids.includes(keep) ? keep : '';
+    };
+    fill(ui.group, 'bulkAssign.ui.anyGroup', f.groups, groupLabel);
+    fill(ui.filter, 'bulkAssign.ui.anyFilter', f.filters, id => names.filters.get(id) || id);
+    fill(ui.tag, 'bulkAssign.ui.anyTag', f.tags, tagLabel);
   }
 
   function resultLine(labelKey, r) {
@@ -84,7 +118,7 @@
     ui.list.replaceChildren(...visible().map(i => {
       const box = el('input', { type: 'checkbox', checked: checked.has(i.key), disabled: running, onchange: () => { box.checked ? checked.add(i.key) : checked.delete(i.key); renderGo(); } });
       const r = results.get(i.key);
-      return el('label', { className: 'row' }, box, el('span', {}, i.name, el('small', {}, i.type, ...S.platformsOf(i).map(o => el('span', { className: 'chip', textContent: o }))),
+      return el('label', { className: 'row', title: hoverText(i) }, box, el('span', {}, i.name, el('small', {}, i.type, ...S.platformsOf(i).map(o => el('span', { className: 'chip', textContent: o }))),
         ...resultLine('bulkAssign.res.assign', r?.assign), ...resultLine('bulkAssign.res.tags', r?.tags)));
     }));
     renderGo();
@@ -107,16 +141,26 @@
 
   async function load() {
     setStatus(T('bulkAssign.status.loading'));
-    const tenant = graph.tenantNow(), errors = [];
+    const tenant = graph.tenantNow(), errors = [], unread = [];
     const lists = await Promise.all(B.KINDS.filter(k => tenant.kinds.includes(k)).map(async kind => {
-      const r = await graph.call('list', kind);
-      if (r.status < 200 || r.status >= 300) { errors.push(T('asBuilt.src.' + kind)); return []; }
-      return r.body.value.map(raw => ({ ...S.policySummary(kind, raw), key: kind + ':' + raw.id, odata: raw['@odata.type'] }));
+      const { rows, rich, error } = await B.loadKind(kind, graph.call);
+      if (error) { errors.push(T('asBuilt.src.' + kind)); return []; }
+      if (!rich) unread.push(T('asBuilt.src.' + kind));
+      return rows.map(raw => ({ ...S.policySummary(kind, raw), key: kind + ':' + raw.id, odata: raw['@odata.type'],
+        assignments: rich ? B.listedAssignments(raw) : null, tags: B.tagsOf(raw) }));
     }));
     items = lists.flat().sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
+    // Names for the filters and the tooltip. A list that cannot be read leaves IDs.
+    const ok = r => r.status >= 200 && r.status < 300;
+    const [t, f, g] = await Promise.all([graph.call('tags', 'meta'), graph.call('filters', 'meta'), B.groupNames(B.facets(items).groups, graph.call)]);
+    if (ok(t)) names.tags = new Map((t.body?.value || []).map(x => [String(x.id), x.displayName]));
+    if (ok(f)) names.filters = new Map((f.body?.value || []).map(x => [x.id, x.displayName]));
+    names.groups = g;
+    fillFacets();
     const oses = [...new Set(items.flatMap(S.platformsOf))].sort((a, b) => a.localeCompare(b, 'fr'));
     if (panel) ui.os.replaceChildren(el('option', { value: '', textContent: T('bulkAssign.ui.allOs') }), ...oses.map(o => el('option', { value: o, textContent: o })));
-    setStatus(T('bulkAssign.status.count', { n: items.length }) + (errors.length ? ` · ${T('bulkAssign.err.source', { list: errors.join(', ') })}` : ''));
+    setStatus(T('bulkAssign.status.count', { n: items.length }) + (errors.length ? ` · ${T('bulkAssign.err.source', { list: errors.join(', ') })}` : '')
+      + (unread.length ? ` · ${T('bulkAssign.status.unread', { list: unread.join(', ') })}` : ''));
     renderList();
     form.load();
   }
@@ -127,7 +171,7 @@
     const scripts = v.target ? todo.filter(i => SCRIPTS.has(i.kind)).length : 0, apps = v.target ? todo.filter(i => i.kind === 'app').length : 0, intent = ui.intent.value;
     const close = () => dialog.remove();
     const cancel = el('button', { className: 'act ghost', textContent: T('bulkAssign.confirm.cancel'), onclick: close });
-    const ok = el('button', { className: 'act', textContent: T('bulkAssign.confirm.ok'), onclick: () => { close(); run(todo, { target: v.target, intent, tagIds: v.tagIds, tid: tenant.tid }); } });
+    const ok = el('button', { className: 'act', textContent: T('bulkAssign.confirm.ok'), onclick: () => { close(); run(todo, { target: v.target, intent, tagIds: v.tagIds, tid: tenant.tid, groupName: v.groupName }); } });
     const dialog = el('div', { className: 'dialog', onkeydown: e => { if (e.key === 'Escape') close(); } }, el('div', { className: 'card', role: 'dialog', ariaModal: 'true' },
       el('h2', { textContent: T('bulkAssign.confirm.title', { n: todo.length }) }),
       el('p', { textContent: T('bulkAssign.confirm.tenant', { directory: directoryName() || '?', tid: tenant.tid }) }),
@@ -146,10 +190,12 @@
     renderList();
     if (panel) { ui.progress.classList.add('on'); ui.fill.style.width = '0'; }
     setStatus(T('bulkAssign.status.running', { done: 0, total: todo.length }));
+    if (plan.target?.groupId && plan.groupName) names.groups.set(plan.target.groupId, plan.groupName);
     const out = await B.runBulk(todo, plan, graph.call, {
       pause: sleep,
       onProgress: (i, res) => {
         results.set(todo[i].key, res);
+        Object.assign(todo[i], B.afterRun(todo[i], plan, res));
         // Applied or already⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ there: not offered again. Failed lines stay checked for another try.
         if ([res.assign, res.tags].filter(Boolean).every(r => r.status === 'done' || r.status === 'already')) checked.delete(todo[i].key);
         setStatus(T('bulkAssign.status.running', { done: i + 1, total: todo.length }));
@@ -159,6 +205,7 @@
     });
     running = false;
     const lines = out.flatMap(r => [r.assign, r.tags]).filter(Boolean), n = s => lines.filter(r => r.status === s).length;
+    fillFacets();
     setStatus(T('bulkAssign.status.done', { done: n('done'), already: n('already'), skipped: n('skipped') + n('notSent'), failed: n('failed'), unknown: n('unknown') }));
     renderList();
     setTimeout(() => ui.progress?.classList.remove('on'), 1500);
@@ -177,6 +224,9 @@
     } });
     ui.type = el('select', { onchange: renderList }, el('option', { value: '', textContent: T('bulkAssign.ui.allTypes') }), ...B.KINDS.map(k => el('option', { value: k, textContent: T('asBuilt.src.' + k) })));
     ui.os = el('select', { onchange: renderList }, el('option', { value: '', textContent: T('bulkAssign.ui.allOs') }));
+    ui.group = el('select', { onchange: renderList, title: T('bulkAssign.ui.groupFilter') }, el('option', { value: '', textContent: T('bulkAssign.ui.anyGroup') }));
+    ui.filter = el('select', { onchange: renderList, title: T('bulkAssign.ui.filterFilter') }, el('option', { value: '', textContent: T('bulkAssign.ui.anyFilter') }));
+    ui.tag = el('select', { onchange: renderList, title: T('bulkAssign.ui.tagFilter') }, el('option', { value: '', textContent: T('bulkAssign.ui.anyTag') }));
     ui.list = el('div', { className: 'list' });
     ui.intent = el('select', { onchange: renderGo, title: T('bulkAssign.ui.intent') }, el('option', { value: '', textContent: T('bulkAssign.ui.intentPick') }),
       ...Object.entries(INTENTS).map(([value, key]) => el('option', { value, textContent: T(key) })));
@@ -188,7 +238,7 @@
     ui.go = el('button', { className: 'act', disabled: true, textContent: T('bulkAssign.ui.go', { n: 0 }), onclick: askConfirm });
     const head = el('div', { className: 'head', title: T('bulkAssign.ui.drag') }, T('bulkAssign.ui.title'), el('span', { className: 'tools' }, ...(window.__tenantCompassPin ? [window.__tenantCompassPin('bulk-assign')] : []), el('button', { className: 'x', textContent: '×', title: T('bulkAssign.ui.close'), onclick: toggle })));
     panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.all, ui.search),
-      el('div', { className: 'bar' }, ui.type, ui.os), ui.list, form.root, ui.intentRow, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
+      el('div', { className: 'bar' }, ui.type, ui.os), el('div', { className: 'bar' }, ui.group, ui.filter, ui.tag), ui.list, form.root, ui.intentRow, el('div', { className: 'foot' }, ui.progress, ui.status, ui.go));
     ui.root.append(panel);
     opened();
     if (window.__tenantCompassDrag) window.__tenantCompassDrag(panel, head, 'bulk-assign-panel');

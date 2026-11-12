@@ -11,11 +11,92 @@
     ['sc', 'configurationPolicies'], ['dc', 'deviceConfigurations' + FIELDS], ['comp', 'deviceCompliancePolicies' + FIELDS], ['admx', 'groupPolicyConfigurations'],
     ['ps', 'deviceManagementScripts' + FIELDS], ['sh', 'deviceShellScripts' + FIELDS], ['cattr', 'deviceCustomAttributeShellScripts' + FIELDS], ['app', 'mobileApps' + FIELDS],
   ]);
-  const listUrl = kind => (SOURCES.has(kind) ? (kind === 'app' ? APPS : GRAPH) + SOURCES.get(kind) : null);
+  // rich: with the assignments and scope tags of each object, for the filters and the tooltip of the list.
+  const listUrl = (kind, rich) => {
+    if (!SOURCES.has(kind)) return null;
+    const url = (kind === 'app' ? APPS : GRAPH) + SOURCES.get(kind);
+    if (!rich) return url;
+    return url.includes('?$select=') ? url + ',roleScopeTagIds&$expand=assignments' : url + '?$expand=assignments';
+  };
 
   const ok = r => r.status >= 200 && r.status < 300;
 
   const { withRetry, refused, writeResult } = A;
+
+  // ---------- the list: assignments and scope tags of each object ----------
+
+  const G = '#microsoft.graph.', GROUPS = 'https://graph.microsoft.com/beta/groups';
+  const GUID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+  const GROUP_BATCH = 15; // values the `in` operator of a Graph filter takes
+
+  // The list with assignments and scope tags, else the plain list: its objects then have no assignments to filter on.
+  async function loadKind(kind, call) {
+    const rich = await call('list', kind, { rich: true });
+    if (ok(rich)) return { rows: rich.body?.value || [], rich: true };
+    const r = await call('list', kind, {});
+    return ok(r) ? { rows: r.body?.value || [], rich: false } : { rows: [], rich: false, error: r.message || `Graph ${r.status}` };
+  }
+
+  // Assignments of a list row read with $expand, null when the list did not bring them whole.
+  const listedAssignments = raw => (Array.isArray(raw?.assignments) && !raw['assignments@odata.nextLink'] ? raw.assignments : null);
+  const tagsOf = raw => (Array.isArray(raw?.roleScopeTagIds) ? raw.roleScopeTagIds.map(String) : null);
+
+  // What an assignment targets: a group ID (included or excluded), 'allUsers' or 'allDevices'. null: another kind of target.
+  function targetRef(t) {
+    const type = String(t?.['@odata.type'] || '');
+    if (type === G + 'groupAssignmentTarget' || type === G + 'exclusionGroupAssignmentTarget') return t.groupId || null;
+    if (/^#microsoft\.graph\.all(Licensed)?UsersAssignmentTarget$/.test(type)) return 'allUsers';
+    return type === G + 'allDevicesAssignmentTarget' ? 'allDevices' : null;
+  }
+  const isExclusion = t => t?.['@odata.type'] === G + 'exclusionGroupAssignmentTarget';
+  const filterOf = t => t?.deviceAndAppManagementAssignmentFilterId || '';
+
+  // The three filters of the list, '' = any. Group and filter: the same assignment must hold both.
+  // Assignments not read never match a group or a filter.
+  function matches(item, { group = '', filter = '', tag = '' } = {}) {
+    if (tag && !(item.tags || []).includes(tag)) return false;
+    if (!group && !filter) return true;
+    return (item.assignments || []).some(a => (!group || targetRef(a?.target) === group) && (!filter || filterOf(a?.target) === filter));
+  }
+
+  // Choices offered by the three filters: what the rows hold.
+  function facets(items) {
+    const groups = new Set(), filters = new Set(), tags = new Set();
+    for (const i of items) {
+      for (const a of i.assignments || []) {
+        const ref = targetRef(a?.target), f = filterOf(a?.target);
+        if (ref) groups.add(ref);
+        if (f) filters.add(f);
+      }
+      for (const t of i.tags || []) tags.add(t);
+    }
+    return { groups: [...groups], filters: [...filters], tags: [...tags] };
+  }
+
+  // Closed URL: only group IDs reach it, at most GROUP_BATCH.
+  function groupNamesUrl(ids) {
+    const list = (Array.isArray(ids) ? ids : []).filter(id => GUID.test(id)).slice(0, GROUP_BATCH);
+    return list.length ? `${GROUPS}?$filter=${encodeURIComponent(`id in (${list.map(id => `'${id}'`).join(',')})`)}&$select=id,displayName` : null;
+  }
+
+  // Names of the groups, by batches. A batch that fails leaves its IDs shown as IDs.
+  // ponytail: sequential batches, a few seconds on a tenant with hundreds of assigned groups; run them in parallel if it shows.
+  async function groupNames(ids, call) {
+    const names = new Map(), list = [...new Set(ids)].filter(id => GUID.test(id));
+    for (let i = 0; i < list.length; i += GROUP_BATCH) {
+      const r = await call('groupNames', 'meta', { ids: list.slice(i, i + GROUP_BATCH) });
+      if (ok(r)) for (const g of r.body?.value || []) names.set(g.id, g.displayName);
+    }
+    return names;
+  }
+
+  // The row after its line ran: what was just applied, so the filters and the tooltip stay true without reading again.
+  function afterRun(item, { target, intent, tagIds }, res) {
+    const out = {};
+    if (res?.assign?.status === 'done' && item.assignments) out.assignments = [...item.assignments, { target, ...(item.kind === 'app' ? { intent } : {}) }];
+    if (res?.tags?.status === 'done') out.tags = [...new Set([...(item.tags || []), ...tagIds])];
+    return out;
+  }
 
   async function assignLine({ kind, id }, target, intent, tid, call, pause) {
     if (A.hasFilter(target) && !A.supportsFilter(kind)) return { status: 'skipped', error: 'bulkAssign.err.noFilter' }; // without its filter, it would reach more devices than asked
@@ -66,7 +147,7 @@
     return out;
   }
 
-  const api = { KINDS: [...SOURCES.keys()], listUrl, applyLine, runBulk };
+  const api = { KINDS: [...SOURCES.keys()], listUrl, loadKind, listedAssignments, tagsOf, targetRef, isExclusion, filterOf, matches, facets, groupNamesUrl, groupNames, afterRun, applyLine, runBulk };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.BulkAssignLib = api; // always: a stray `module` global must not hide the lib from the page
 })();

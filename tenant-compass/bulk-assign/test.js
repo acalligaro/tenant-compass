@@ -249,6 +249,72 @@ assert.deepStrictEqual(A.groupsIn(null), []);
   assert.strictEqual(B.listUrl('sc'), BASE + 'configurationPolicies');
   assert.strictEqual(B.listUrl('rem'), null);
 
+  // ---------- list filters and tooltip ----------
+
+  // Rich list: assignments and scope tags on top of the plain one
+  assert.strictEqual(B.listUrl('sc', true), BASE + 'configurationPolicies?$expand=assignments');
+  assert.strictEqual(B.listUrl('dc', true), BASE + 'deviceConfigurations?$select=id,displayName,description,lastModifiedDateTime,roleScopeTagIds&$expand=assignments');
+  assert.strictEqual(B.listUrl('rem', true), null);
+
+  // A refused rich list falls back to the plain one, whose rows then have no assignments to filter on
+  let lf = fake({ list: [{ status: 400 }, { status: 200, body: { value: [{ id: 'p' }] } }] });
+  assert.deepStrictEqual(await B.loadKind('dc', lf.call), { rows: [{ id: 'p' }], rich: false });
+  assert.deepStrictEqual(lf.calls.map(c => c.args), [{ rich: true }, {}]);
+  lf = fake({ list: { status: 200, body: { value: [] } } });
+  assert.strictEqual((await B.loadKind('dc', lf.call)).rich, true);
+  lf = fake({ list: [{ status: 403 }, { status: 403, message: 'no' }] });
+  assert.strictEqual((await B.loadKind('dc', lf.call)).error, 'no');
+
+  assert.strictEqual(B.listedAssignments({ assignments: [] }).length, 0);
+  assert.strictEqual(B.listedAssignments({ assignments: [{}], 'assignments@odata.nextLink': 'n' }), null); // partial: not trusted
+  assert.strictEqual(B.listedAssignments({ id: 'x' }), null);
+  assert.deepStrictEqual(B.tagsOf({ roleScopeTagIds: [0, '7'] }), ['0', '7']);
+  assert.strictEqual(B.tagsOf({}), null);
+
+  assert.strictEqual(B.targetRef(groupOf('g1')), 'g1');
+  assert.strictEqual(B.targetRef(excluded), 'g9');
+  assert.strictEqual(B.targetRef({ '@odata.type': G + 'allLicensedUsersAssignmentTarget' }), 'allUsers');
+  assert.strictEqual(B.targetRef({ '@odata.type': G + 'allDevicesAssignmentTarget' }), 'allDevices');
+  assert.strictEqual(B.targetRef({ '@odata.type': G + 'configurationManagerCollectionAssignmentTarget', collectionId: 'c' }), null);
+  assert.ok(B.isExclusion(excluded) && !B.isExclusion(groupOf('g1')));
+
+  const rowA = { kind: 'dc', assignments: [{ target: filtered }, { target: excluded }], tags: ['0', '7'] };
+  const rowB = { kind: 'sc', assignments: [{ target: { '@odata.type': G + 'allDevicesAssignmentTarget' } }], tags: ['0'] };
+  const rowC = { kind: 'ps', assignments: null, tags: null }; // list without assignments
+  const rows = [rowA, rowB, rowC];
+  const keep = by => rows.filter(r => B.matches(r, by)).map(r => r.kind);
+  assert.deepStrictEqual(keep({}), ['dc', 'sc', 'ps']);
+  assert.deepStrictEqual(keep({ group: 'g2' }), ['dc']);
+  assert.deepStrictEqual(keep({ group: 'g9' }), ['dc']); // an excluded group counts
+  assert.deepStrictEqual(keep({ group: 'allDevices' }), ['sc']);
+  assert.deepStrictEqual(keep({ filter: 'f' }), ['dc']);
+  assert.deepStrictEqual(keep({ group: 'g9', filter: 'f' }), []); // the filter is on g2's assignment, not g9's
+  assert.deepStrictEqual(keep({ tag: '7' }), ['dc']);
+  assert.deepStrictEqual(keep({ tag: '0', group: 'allDevices' }), ['sc']);
+  assert.deepStrictEqual(B.facets(rows), { groups: ['g2', 'g9', 'allDevices'], filters: ['f'], tags: ['0', '7'] });
+
+  // Group names: closed URL with GUIDs only, by batches of 15
+  const gid = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+  assert.strictEqual(B.groupNamesUrl(['x', "' or 1 eq 1"]), null);
+  assert.strictEqual(B.groupNamesUrl('nope'), null);
+  assert.strictEqual(B.groupNamesUrl([gid(1), 'allUsers', gid(2)]),
+    `https://graph.microsoft.com/beta/groups?$filter=${encodeURIComponent(`id in ('${gid(1)}','${gid(2)}')`)}&$select=id,displayName`);
+  assert.strictEqual(decodeURIComponent(B.groupNamesUrl(Array.from({ length: 20 }, (_, n) => gid(n)))).split("'").length - 1, 30);
+  const gf = fake({ groupNames: [{ status: 200, body: { value: [{ id: gid(1), displayName: 'One' }] } }, { status: 500 }] });
+  const groupMap = await B.groupNames([...Array.from({ length: 16 }, (_, n) => gid(n)), gid(1), 'allDevices'], gf.call);
+  assert.deepStrictEqual(gf.calls.map(c => c.args.ids.length), [15, 1]);
+  assert.ok(gf.calls.every(c => c.kind === 'meta'));
+  assert.deepStrictEqual([...groupMap], [[gid(1), 'One']]); // the failed batch leaves IDs
+
+  // After a run: what was applied shows in the filters and the tooltip
+  const runPlan = { target: groupOf('g1'), intent: 'required', tagIds: ['7'] };
+  assert.deepStrictEqual(B.afterRun(rowB, runPlan, { assign: { status: 'done' }, tags: { status: 'done' } }),
+    { assignments: [...rowB.assignments, { target: groupOf('g1') }], tags: ['0', '7'] });
+  assert.deepStrictEqual(B.afterRun({ kind: 'app', assignments: [], tags: ['0'] }, runPlan, { assign: { status: 'done' }, tags: null }).assignments,
+    [{ target: groupOf('g1'), intent: 'required' }]);
+  assert.deepStrictEqual(B.afterRun(rowC, runPlan, { assign: { status: 'done' }, tags: { status: 'failed' } }), {}); // unknown list stays unknown
+  assert.deepStrictEqual(B.afterRun(rowA, runPlan, { assign: { status: 'already' }, tags: null }), {});
+
   // i18n: same keys in both languages, every key used by the code exists
   const dicts = {};
   globalThis.__tenantCompassI18n = { add: d => { for (const l of ['fr', 'en']) dicts[l] = { ...dicts[l], ...d[l] }; } };
