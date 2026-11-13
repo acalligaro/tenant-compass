@@ -697,20 +697,16 @@ Toutes les UI injectées vivent dans un Shadow DOM (`:host { all: initial; color
 - `window.__tenantCompassDrag(el, handle, key)` : applique la position mémorisée (bornée à la fenêtre), rend `handle` déplaçable par pointer events. Sous 4 px de mouvement, c'est un clic. Après un vrai glissement, le clic suivant est avalé pour ne pas basculer le panneau. Les boutons internes au handle gardent leur clic.
 - Position stockée dans le `localStorage` **de la page portail** (donc par origine : `intune.microsoft.com` et `endpoint.microsoft.com` ont des positions distinctes), clé `tenant-compass:pos:<key>`, valeur `{ x, y }` en pixels.
 
-**Positions par défaut** (CSS, quand aucune position n'est mémorisée) :
+**Positions par défaut** (CSS, quand aucune position n'est mémorisée). Les boutons s'empilent dans la colonne de menu grise à gauche du portail (environ 225 px), les fonctions toujours actives en bas, celles qui écrivent au-dessus ; une fonction désactivée laisse un vide dans la pile :
 
 | Élément | Position |
 |---|---|
 | Bouton As-Built | `left: 20px; bottom: 20px` |
-| Panneau As-Built | `left: 20px; bottom: 124px`, largeur 500 px, hauteur max 76vh |
-| Bouton Assignment Lens | `left: 20px; bottom: 72px` (au-dessus du bouton As-Built) |
-| Panneau Assignment Lens | `left: 20px; bottom: 72px`, largeur 380 px, hauteur max 60vh |
-| Bouton Policy Import | `left: 120px; bottom: 20px` (à droite du bouton As-Built, hors de portée des panneaux ouverts) |
-| Panneau Policy Import | `left: 20px; bottom: 124px`, largeur 500 px, hauteur max 76vh |
-| Bouton Bulk Assignment | `left: 206px; bottom: 20px` (à droite du bouton Import) |
-| Panneau Bulk Assignment | `left: 20px; bottom: 76px`, largeur 520 px, hauteur max 84vh |
-| Bouton Scope Tags Clean up | `left: 324px; bottom: 20px` (à droite du bouton Bulk Assign) |
-| Panneau Scope Tags Clean up | `left: 20px; bottom: 76px`, largeur 560 px, hauteur max 84vh |
+| Bouton Assignment Lens | `left: 20px; bottom: 72px` |
+| Bouton Policy Import | `left: 20px; bottom: 124px` |
+| Bouton Bulk Assignment | `left: 20px; bottom: 176px` |
+| Bouton Scope Tags Clean up | `left: 20px; bottom: 228px` |
+| Panneaux (les cinq) | `left: 240px; bottom: 20px`, à droite de la colonne de boutons, qui reste cliquable. Largeur et hauteur max : As-Built et Policy Import 500 px / 76vh, Assignment Lens 380 px / 60vh, Bulk Assignment 520 px / 84vh, Scope Tags Clean up 560 px / 84vh |
 | Dialogue Change Snapshot | `right: 20px; bottom: 20px`, largeur 520 px, fixe (pas de `drag.js`, non concerné par « Positions par défaut ») |
 
 **Bouton « Positions par défaut »** (popup) : `chrome.scripting.executeScript` dans le frame top de l'onglet actif supprime toutes les clés `tenant-compass:pos:*`, puis recharge l'onglet. Échec (onglet hors portail) → message « Ouvrez d'abord l'onglet du portail Intune. »

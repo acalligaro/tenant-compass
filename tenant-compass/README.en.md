@@ -48,9 +48,9 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Change Snapshot | Local change log: before / after diff, author, ticket number, JSON / CSV export | Window at the bottom right after a save; log from the menu |
 | Set Tenant Language | Switches the console between two preset languages in one click | 🌐 buttons in the menu; Intune, Azure, Entra, Defender, Purview |
 | PIM shortcut | Opens PIM > My roles (eligible or active assignments) on the active tab's tenant in one click | 🔑 PIM eligible and 🔑 PIM active buttons in the menu |
-| Policy Import | Creates policies from As-Built JSON exports, with optional group and scope tags. **Writes to the tenant: off by default** | Import button, right of As-Built (Intune) |
-| Bulk Assignment | Adds an assignment (group, all users, all devices), a filter and scope tags to several policies. **Writes to the tenant: off by default** | Bulk Assign button, right of Import (Intune) |
-| Scope Tags Clean up | Removes the Default scope tag from policies and apps that have another scope tag. **Writes to the tenant: off by default** | Scope Tags button, right of Bulk Assign (Intune) |
+| Policy Import | Creates policies from As-Built JSON exports, with optional group and scope tags. **Writes to the tenant: off by default** | Import button, above Assignment Lens (Intune) |
+| Bulk Assignment | Adds an assignment (group, all users, all devices), a filter and scope tags to several policies. **Writes to the tenant: off by default** | Bulk Assign button, above Import (Intune) |
+| Scope Tags Clean up | Removes the Default scope tag from policies and apps that have another scope tag. **Writes to the tenant: off by default** | Scope Tags button, above Bulk Assign (Intune) |
 
 ## Installation
 
@@ -296,7 +296,7 @@ When Tenant Guard has detected the active tab's tenant (tenant ID or `*.onmicros
 
 It creates Intune policies from As-Built JSON exports, without PowerShell, without an app registration and without Graph Explorer. The calls still go through Microsoft Graph, with the portal session.
 
-1. Click **Import**, right of the As-Built button, then choose one or more `.json` files.
+1. Click **Import**, above the Assignment Lens button, then choose one or more `.json` files.
 2. Check the preview: each row shows the type, the warnings and what blocks it. Nothing is written at this step.
 3. Click **Import (n)**, check the directory and tenant shown, then click **OK**.
 

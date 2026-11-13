@@ -48,9 +48,9 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Change Snapshot | Journal local des modifications : différence avant / après, auteur, n° de ticket, export JSON / CSV | Fenêtre en bas à droite après un enregistrement ; journal depuis le menu |
 | Set Tenant Language | Bascule la console entre deux langues prédéfinies, en 1 clic | Boutons 🌐 du menu ; Intune, Azure, Entra, Defender, Purview |
 | Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives) sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible et 🔑 PIM actif du menu |
-| Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec groupe et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, à droite d'As-Built (Intune) |
-| Bulk Assignment | Ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. **Écrit dans le tenant : désactivée par défaut** | Bouton Bulk Assign, à droite d'Import (Intune) |
-| Scope Tags Clean up | Retire le scope tag Default des stratégies et applications qui ont un autre scope tag. **Écrit dans le tenant : désactivée par défaut** | Bouton Scope Tags, à droite de Bulk Assign (Intune) |
+| Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec groupe et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, au-dessus d'Assignment Lens (Intune) |
+| Bulk Assignment | Ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. **Écrit dans le tenant : désactivée par défaut** | Bouton Bulk Assign, au-dessus d'Import (Intune) |
+| Scope Tags Clean up | Retire le scope tag Default des stratégies et applications qui ont un autre scope tag. **Écrit dans le tenant : désactivée par défaut** | Bouton Scope Tags, au-dessus de Bulk Assign (Intune) |
 
 ## Installation
 
@@ -298,7 +298,7 @@ Si Tenant Guard a détecté le tenant de l'onglet actif (ID de tenant ou domaine
 
 Elle crée des stratégies Intune à partir des exports JSON d'As-Built, sans PowerShell, sans application à inscrire et sans Graph Explorer. Les appels passent bien par Microsoft Graph, avec la session du portail.
 
-1. Cliquer sur **Import**, à droite du bouton As-Built, puis choisir un ou plusieurs fichiers `.json`.
+1. Cliquer sur **Import**, au-dessus du bouton Assignment Lens, puis choisir un ou plusieurs fichiers `.json`.
 2. Vérifier l'aperçu : chaque ligne indique le type, les avertissements et ce qui la bloque. Rien n'est écrit à cette étape.
 3. Cliquer sur **Importer (n)**, vérifier l'annuaire et le tenant affichés, puis cliquer sur **OK**.
 
