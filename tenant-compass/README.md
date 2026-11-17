@@ -52,7 +52,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives) sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible et 🔑 PIM actif du menu |
 | Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec groupe et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, au-dessus d'Assignment Search (Intune) |
 | Bulk Assignment | Ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. **Écrit dans le tenant : désactivée par défaut** | Bouton Bulk Assign, au-dessus d'Import (Intune) |
-| Scope Tags Clean up | Retire le scope tag Default des stratégies et applications qui ont un autre scope tag. **Écrit dans le tenant : désactivée par défaut** | Bouton Scope Tags, au-dessus de Bulk Assign (Intune) |
+| Scope Tags Clean up | Retire un scope tag choisi dans une liste (Default ou un autre) des stratégies et applications qui en gardent au moins un autre. **Écrit dans le tenant : désactivée par défaut** | Bouton Scope Tags, au-dessus de Bulk Assign (Intune) |
 
 ## Installation
 
@@ -380,21 +380,22 @@ Comme As-Built, elle liste vos stratégies. Au lieu de les exporter, elle leur a
 
 **Désactivée par défaut : elle modifie des stratégies et des applications existantes.** Activez-la dans ⚙, puis rechargez l'onglet du portail.
 
-Comme As-Built, elle affiche une liste. Celle-ci montre chaque stratégie et application qui porte le scope tag Default, avec tous ses scope tags. Les objets sur lesquels le bouton peut agir viennent en premier.
+Comme As-Built, elle affiche une liste. La liste déroulante **Scope tag à retirer** donne le scope tag à traiter : Default au départ, ou n'importe quel autre scope tag du tenant, chacun suivi de son nombre d'objets. La liste montre chaque stratégie et application qui porte ce scope tag, avec tous ses scope tags. Les objets sur lesquels le bouton peut agir viennent en premier.
 
-1. Cliquer sur **Scope Tags**, puis cocher les objets (recherche, filtres par type et par OS).
-2. Cliquer sur **Retirer Default (n)**, vérifier le tenant et le nombre d'objets, puis cliquer sur **OK**.
+1. Cliquer sur **Scope Tags**, puis choisir le scope tag à retirer (Default par défaut).
+2. Cocher les objets (recherche, filtres par type et par OS).
+3. Cliquer sur **Retirer <scope tag> (n)**, vérifier le tenant et le nombre d'objets, puis cliquer sur **OK**.
 
 **Exporter (JSON)** télécharge la liste des objets cochés, sans rien modifier : ID, nom, type, OS et scope tags (ID et nom) de chacun, tels qu'affichés dans la liste.
 
 **Pris en charge** : catalogue de paramètres, profils de configuration, conformité, modèles d'administration (ADMX), scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, remédiations, applications.
 
-- **Sélection rapide** : la case **Seulement Default + un autre scope tag** ne garde que les objets à nettoyer. La case **Tout cocher** les prend alors tous d'un coup.
-- **La règle** : Default n'est retiré que si un autre scope tag reste. Un objet qui n'a que Default porte la balise **Default seul**. Vous pouvez le cocher, mais rien n'est envoyé pour lui, et sa ligne l'indique.
+- **Sélection rapide** : la case **Seulement <scope tag> + un autre scope tag** ne garde que les objets à nettoyer. La case **Tout cocher** les prend alors tous d'un coup.
+- **La règle**, la même pour chaque scope tag : le scope tag choisi n'est retiré que si un autre scope tag reste (Default compris). Un objet qui n'a que ce scope tag porte la balise **<scope tag> seul**. Vous pouvez le cocher, mais rien n'est envoyé pour lui, et sa ligne l'indique.
 - **Relecture juste avant l'écriture** : c'est l'état réel de l'objet qui décide, pas la liste affichée. Si son autre scope tag a disparu entre-temps, rien n'est envoyé.
-- **Seul Default est retiré** : les autres scope tags restent.
-- **Effet** : les administrateurs limités au scope tag Default ne verront plus ces objets. Le dialogue le rappelle avant OK.
-- **Liste** : les objets sans Default n'y figurent pas. Ceux dont les scope tags sont illisibles sont comptés dans la ligne d'état, et un type que le jeton ne peut pas écrire y est nommé.
+- **Seul le scope tag choisi est retiré** : les autres restent. Changer de scope tag décoche tout.
+- **Effet** : les administrateurs limités au scope tag retiré ne verront plus ces objets. Le dialogue le rappelle avant OK.
+- **Liste** : les objets sans le scope tag choisi n'y figurent pas. Ceux dont les scope tags sont illisibles sont comptés dans la ligne d'état, et un type que le jeton ne peut pas écrire y est nommé.
 - **Résultat inconnu** (erreur 5xx, coupure réseau) : vérifiez dans le portail avant de relancer. Une session expirée arrête la série.
 - **Droits** : `DeviceManagementConfiguration.ReadWrite.All` (profils, catalogue, conformité, ADMX), `DeviceManagementScripts.ReadWrite.All` (scripts, remédiations), `DeviceManagementApps.ReadWrite.All` (applications).
 - **Journal** : Change Snapshot journalise les stratégies, sans carte de ticket par objet. Il ne suit pas encore les applications : leurs changements n'y apparaissent pas.

@@ -40,7 +40,7 @@ node tenant-compass/scope-cleanup/test.js
 
 - The portal's access token is never stored, nor sent anywhere other than `graph.microsoft.com`.
 - As-Built, Assignment Lens and Assignment Search only read from Graph (`GET`).
-- Policy Import, Bulk Assignment and Scope Tags Clean up, off by default, are the only features that write: creating policies, adding assignments or scope tags, removing the Default scope tag, after confirmation.
+- Policy Import, Bulk Assignment and Scope Tags Clean up, off by default, are the only features that write: creating policies, adding assignments or scope tags, removing a scope tag (Default or another one), after confirmation.
 - Graph data is never injected as HTML.
 - Details per feature in each README and in `ARCHITECTURE.md`.
 

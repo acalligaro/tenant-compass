@@ -40,7 +40,7 @@ node tenant-compass/scope-cleanup/test.js
 
 - Le jeton d'accès du portail n'est jamais enregistré ni envoyé ailleurs qu'à `graph.microsoft.com`.
 - As-Built, Assignment Lens et Assignment Search ne font que des lectures Graph (`GET`).
-- Policy Import, Bulk Assignment et Scope Tags Clean up, désactivées par défaut, sont les seules fonctions qui écrivent : création de stratégies, ajout d'affectations ou de scope tags, retrait du scope tag Default, après confirmation.
+- Policy Import, Bulk Assignment et Scope Tags Clean up, désactivées par défaut, sont les seules fonctions qui écrivent : création de stratégies, ajout d'affectations ou de scope tags, retrait d'un scope tag (Default ou un autre), après confirmation.
 - Les données Graph ne sont jamais injectées comme HTML.
 - Détails par extension dans chaque README et dans `ARCHITECTURE.md`.
 

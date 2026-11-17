@@ -52,7 +52,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | PIM shortcut | Opens PIM > My roles (eligible or active assignments) on the active tab's tenant in one click | 🔑 PIM eligible and 🔑 PIM active buttons in the menu |
 | Policy Import | Creates policies from As-Built JSON exports, with optional group and scope tags. **Writes to the tenant: off by default** | Import button, above Assignment Search (Intune) |
 | Bulk Assignment | Adds an assignment (group, all users, all devices), a filter and scope tags to several policies. **Writes to the tenant: off by default** | Bulk Assign button, above Import (Intune) |
-| Scope Tags Clean up | Removes the Default scope tag from policies and apps that have another scope tag. **Writes to the tenant: off by default** | Scope Tags button, above Bulk Assign (Intune) |
+| Scope Tags Clean up | Removes a scope tag picked from a list (Default or another one) from policies and apps that keep at least one other. **Writes to the tenant: off by default** | Scope Tags button, above Bulk Assign (Intune) |
 
 ## Installation
 
@@ -378,21 +378,22 @@ Like As-Built, it lists your policies. Instead of exporting them, it adds an ass
 
 **Off by default: it changes existing policies and apps.** Turn it on in ⚙, then reload the portal tab.
 
-Like As-Built, it shows a list. This one shows each policy and app holding the Default scope tag, with all its scope tags. The objects the button can act on come first.
+Like As-Built, it shows a list. The **Scope tag to remove** drop-down list gives the scope tag to process: Default at first, or any other scope tag of the tenant, each followed by its number of objects. The list shows each policy and app holding that scope tag, with all its scope tags. The objects the button can act on come first.
 
-1. Click **Scope Tags**, then check the objects (search, filters by type and OS).
-2. Click **Remove Default (n)**, check the tenant and the number of objects, then click **OK**.
+1. Click **Scope Tags**, then choose the scope tag to remove (Default by default).
+2. Check the objects (search, filters by type and OS).
+3. Click **Remove <scope tag> (n)**, check the tenant and the number of objects, then click **OK**.
 
 **Export (JSON)** downloads the list of checked objects, without changing anything: ID, name, type, OS and scope tags (ID and name) of each, as shown in the list.
 
 **Supported**: settings catalog, configuration profiles, compliance, administrative templates (ADMX), PowerShell scripts, macOS shell scripts, macOS custom attributes, remediations, apps.
 
-- **Quick selection**: the **Only Default + another scope tag** box keeps only the objects to clean. The **check all** box then takes them all at once.
-- **The rule**: Default is removed only if another scope tag stays. An object with Default only carries the **Default only** badge. You can check it, but nothing is sent for it, and its row says so.
+- **Quick selection**: the **Only <scope tag> + another scope tag** box keeps only the objects to clean. The **check all** box then takes them all at once.
+- **The rule**, the same for every scope tag: the scope tag chosen is removed only if another scope tag stays (Default included). An object with that scope tag only carries the **<scope tag> only** badge. You can check it, but nothing is sent for it, and its row says so.
 - **Read just before the write**: the real state of the object decides, not the list shown. If its other scope tag has gone in the meantime, nothing is sent.
-- **Only Default is removed**: the other scope tags stay.
-- **Effect**: admins limited to the Default scope tag will no longer see these objects. The dialog says so before OK.
-- **List**: objects without Default are not in it. Those with unreadable scope tags are counted in the status line, and a type the token cannot write is named there.
+- **Only the scope tag chosen is removed**: the others stay. Choosing another scope tag unchecks everything.
+- **Effect**: admins limited to the scope tag removed will no longer see these objects. The dialog says so before OK.
+- **List**: objects without the scope tag chosen are not in it. Those with unreadable scope tags are counted in the status line, and a type the token cannot write is named there.
 - **Unknown result** (5xx error, network failure): check in the portal before running again. An expired session stops the series.
 - **Permissions**: `DeviceManagementConfiguration.ReadWrite.All` (profiles, catalog, compliance, ADMX), `DeviceManagementScripts.ReadWrite.All` (scripts, remediations), `DeviceManagementApps.ReadWrite.All` (apps).
 - **Log**: Change Snapshot logs policies, without one ticket card per object. It does not track apps yet: their changes do not appear in it.

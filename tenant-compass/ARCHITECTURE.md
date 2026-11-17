@@ -1,6 +1,6 @@
 # Tenant Compass : architecture
 
-Document destiné aux mainteneurs. Il décrit ce que fait réellement le code de `tenant-compass/` (version `0.14.0` du manifeste). Les points non confirmés par la lecture du code sont marqués **à vérifier**.
+Document destiné aux mainteneurs. Il décrit ce que fait réellement le code de `tenant-compass/` (version `0.15.0` du manifeste). Les points non confirmés par la lecture du code sont marqués **à vérifier**.
 
 ---
 
@@ -22,7 +22,7 @@ Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111)
 | **Raccourci PIM** | Boutons violets « 🔑 PIM éligible » / « 🔑 PIM actif » du menu : ouvrent PIM > Mes rôles sur le tenant détecté dans l'onglet actif. |
 | **Policy Import** | Bouton flottant, **désactivé par défaut** : crée des stratégies Intune à partir d'exports JSON As-Built, avec groupe et scope tags en option. Écrit dans le tenant. |
 | **Bulk Assignment** | Bouton flottant, **désactivé par défaut** : ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. Écrit dans le tenant. |
-| **Scope Tags Clean up** | Bouton flottant, **désactivé par défaut** : retire le scope tag Default des stratégies et applications qui ont un autre scope tag. Écrit dans le tenant. |
+| **Scope Tags Clean up** | Bouton flottant, **désactivé par défaut** : retire un scope tag choisi dans une liste (Default ou un autre) des stratégies et applications qui en gardent au moins un autre. Écrit dans le tenant. |
 
 Principes :
 
@@ -612,7 +612,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 ### 4.10 Scope Tags Clean up
 
-**Rôle.** Retirer le scope tag Default (`0`) des stratégies et applications qui ont un autre scope tag. **Elle modifie des objets existants, donc elle est désactivée par défaut.**
+**Rôle.** Retirer un scope tag des stratégies et applications qui en ont un autre. Le scope tag se choisit dans une liste déroulante (`tagChoices` : les scope tags du tenant et ceux vus sur les objets, chacun avec son nombre d'objets, Default `0` en tête et choisi au départ). **Elle modifie des objets existants, donc elle est désactivée par défaut.**
 
 **Scripts.**
 
@@ -620,11 +620,11 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 |---|---|---|---|---|---|
 | `scope-cleanup` | `shared/drag.js`, `shared/graph-bridge.js`, `shared/assign-lib.js`, `shared/assign-i18n.js`, `as-built/i18n.js`, `as-built/lib.js`, `policy-import/lib.js`, `scope-cleanup/lib.js`, `scope-cleanup/page.js` | MAIN | `document_start` | Toutes | `intune.microsoft.com`, `endpoint.microsoft.com`, `*.portal.azure.net` |
 
-**Lecture de la liste.** Liste de chaque type avec `roleScopeTagIds` dans `$select` ; si elle est refusée, relecture avec l'URL qu'As-Built utilise (`loadKind`). Un objet sans tags dans la réponse est relu seul, 3 à la fois (`resolveTags`) : IntuneManagement signale que la liste des applications ne les renvoie pas. Seuls les objets portant Default sont affichés, les retirables d'abord. La case « Seulement Default + un autre scope tag » (`keepRow`) masque les objets Default seul et les décoche ; une ligne déjà traitée reste visible pour montrer son résultat, et « Tout cocher » ne prend alors que les objets retirables.
+**Lecture de la liste.** Liste de chaque type avec `roleScopeTagIds` dans `$select` ; si elle est refusée, relecture avec l'URL qu'As-Built utilise (`loadKind`). Un objet sans tags dans la réponse est relu seul, 3 à la fois (`resolveTags`) : IntuneManagement signale que la liste des applications ne les renvoie pas. Tous les objets aux tags lisibles restent en mémoire ; seuls ceux qui portent le tag choisi sont affichés, les retirables d'abord. Changer de tag vide les cases cochées et les résultats affichés ; la liste est verrouillée pendant une série. La case « Seulement <tag> + un autre scope tag » (`keepRow`) masque les objets qui n'ont que ce tag et les décoche ; une ligne déjà traitée reste visible pour montrer son résultat, et « Tout cocher » ne prend alors que les objets retirables.
 
-**La règle (`cleanPlan`).** Un corps n'existe que si un autre tag reste. Default seul, Default absent, tags illisibles ou `@odata.type` manquant sur un type polymorphe : aucun envoi.
+**La règle (`cleanPlan`).** Même règle pour chaque tag (`stateOf(tags, tag)`, `cleanPlan(kind, policy, tag)`, Default par défaut). Un corps n'existe que si un autre tag reste. Tag choisi seul ou absent, tags illisibles ou `@odata.type` manquant sur un type polymorphe : aucun envoi.
 
-**Flux d'une ligne (`cleanLine`).** Relecture de l'objet juste avant l'écriture : c'est elle qui décide, pas la liste affichée. Puis `PATCH {collection}/{id}` avec `roleScopeTagIds` sans Default, et `@odata.type` pour les profils, la conformité et les applications. Un objet qui n'a que Default peut être coché : rien n'est envoyé et la ligne l'indique.
+**Flux d'une ligne (`cleanLine`).** Relecture de l'objet juste avant l'écriture : c'est elle qui décide, pas la liste affichée. Puis `PATCH {collection}/{id}` avec `roleScopeTagIds` sans le tag choisi (celui confirmé dans le dialogue, passé à `runClean`), et `@odata.type` pour les profils, la conformité et les applications. Un objet qui n'a que ce tag peut être coché : rien n'est envoyé et la ligne l'indique.
 
 **Endpoints.** Table fermée `KINDS` : `deviceManagement/` `configurationPolicies`, `deviceConfigurations`, `deviceCompliancePolicies`, `groupPolicyConfigurations`, `deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts`, et `deviceAppManagement/mobileApps`. Droit vérifié par type (`kindsFor`) ; un type sans droit est nommé dans la ligne d'état. Le canal de cette fonction n'expose que `list`, `tags`, `policy` et `patchTags`.
 
@@ -638,7 +638,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 **UI.** Hôte `#scope-cleanup`, Shadow DOM fermé. Le dialogue de confirmation fait office de garde : OK reste un seul clic, y compris sur un tenant PROD.
 
-**Tests.** `scope-cleanup/test.js` : règle sur Default (jamais de liste vide), tables fermées, droits par type, relecture sans `$select`, lecture un par un, ligne (Default seul, liste périmée, lecture refusée, `5xx`), série (`429`, `401`), `exportRows`, clés i18n, `scopeCleanup: false` dans les deux `DEFAULTS`, contrôles statiques.
+**Tests.** `scope-cleanup/test.js` : règle sur Default et sur un autre tag (jamais de liste vide, Default gardé quand un autre tag part), `tagChoices`, tables fermées, droits par type, relecture sans `$select`, lecture un par un, ligne (Default seul, liste périmée, lecture refusée, `5xx`), série (`429`, `401`), `exportRows`, clés i18n, `scopeCleanup: false` dans les deux `DEFAULTS`, contrôles statiques.
 
 ### 4.11 Assignment Search
 
@@ -710,7 +710,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 - `background.js` enregistre le marqueur **`ui-lang`** : `shared/lang/fr.js` ou `shared/lang/en.js` selon `lang`, `document_start`, toutes les frames, tous les `host_permissions`, monde ISOLATED. Il pose `<html data-tenant-compass-lang="fr|en">`, attribut lisible par les deux mondes (les scripts MAIN n'ont pas accès à `chrome.*`).
 - `withI18n` ajoute en tête de chaque script de fonction l'assistant puis `<fonction>/i18n.js`. **Chrome n'injecte un fichier qu'une fois par frame, quel que soit le monde** : un fichier listé par un script MAIN et par un script ISOLATED ne s'exécute que dans le premier injecté. D'où un chemin par monde pour l'assistant (`shared/i18n-page.js` en MAIN, `shared/i18n-page-isolated.js` en ISOLATED, copies identiques vérifiées par `tenant-guard/test.js`), et `i18n: false` sur les hooks MAIN sans texte, pour que `<fonction>/i18n.js` arrive dans le script ISOLATED qui affiche la carte. Aucun fichier n'est listé dans les deux mondes (vérifié par `tenant-guard/test.js`) : `change-snapshot/lib.js` n'est enregistré que pour le hook MAIN, et `content.js` le charge par `import()` (ressource web accessible). Avant cette règle, `lib.js` pouvait partir dans le monde ISOLATED et `page.js` s'arrêtait sans rien observer.
 - `shared/i18n-page.js` n'expose qu'un global, `globalThis.__tenantCompassI18n` (garde contre le double chargement, pour ne pas heurter les globaux du portail) : `lang()` (lit l'attribut à chaque appel, `fr` par défaut), `add({ fr, en })` (fusionne un dictionnaire), `t(key, vars)` (repli sur `fr` puis sur la clé, variables `{nom}`).
-- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 42, Assignment Search 62, Change Snapshot 36, Policy Import 64, Bulk Assignment 43, Scope Tags Clean up 33, formulaire d'affectation 21.
+- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 42, Assignment Search 62, Change Snapshot 36, Policy Import 64, Bulk Assignment 43, Scope Tags Clean up 37, formulaire d'affectation 21.
 - Les `lib.js` gardent des défauts français pour les tests Node (As-Built : `T(key, frDefault)`), à garder alignés sur le `fr` de `i18n.js`.
 - `storage.onChanged` sur `lang` relance `apply()` ; la nouvelle langue s'applique aux onglets du portail **après rechargement** (bouton `#reload-btn`). La page Journal, page d'extension, se re-rend immédiatement.
 - Ajouter une langue : un dictionnaire de plus dans `I18N` et dans chaque `<fonction>/i18n.js` (mêmes clés), un `shared/lang/<xx>.js`, la valeur dans `LANGS` (`background.js`), dans `dict` et `lang()` de `shared/i18n-page.js`, dans la liste de `journal.js`, et un bouton `data-lang` dans `popup.html`.
