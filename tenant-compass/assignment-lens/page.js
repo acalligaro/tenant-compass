@@ -296,9 +296,11 @@
     drag(panel, header, 'assignment-lens-panel');
   }
 
-  const count = g => g.virtual ? T('virtual') : g.count == null ? T('members.unknown') : T(g.count > 1 ? 'members.many' : 'members.one', { n: g.count });
+  // 0 members: the assignment (or exclusion) reaches no one, shown in red instead of a count.
+  const count = g => g.virtual ? T('virtual') : g.count == null ? T('members.unknown') : g.count === 0 ? null : T(g.count > 1 ? 'members.many' : 'members.one', { n: g.count });
+  const empty = g => g.count === 0 && h('span', 'e', ' · ' + T('members.empty'));
   const filter = f => f && T('filter', { name: f.name, mode: ['include', 'exclude'].includes(f.mode) ? T('mode.' + f.mode) : f.mode });
-  const meta = (...parts) => h('span', 'm', ' · ' + parts.filter(Boolean).join(' · '));
+  const meta = (...parts) => (parts = parts.filter(Boolean)).length ? h('span', 'm', ' · ' + parts.join(' · ')) : null;
 
   function body() {
     const r = result;
@@ -309,9 +311,9 @@
     return [
       h('div', null, h('strong', null, r.name), h('span', 'm', ` · ${family(r.family)}`)),
       h('h3', null, T('included', { n: r.include.length })),
-      list(r.include, g => [g.name, meta(count(g), intent(g.intent), filter(g.filter))], T('noAssignment')),
+      list(r.include, g => [g.name, meta(count(g), intent(g.intent), filter(g.filter)), empty(g)], T('noAssignment')),
       h('h3', null, T('excluded', { n: r.exclude.length })),
-      list(r.exclude, g => [g.name, meta(count(g))], T('noExclusion')),
+      list(r.exclude, g => [g.name, meta(count(g)), empty(g)], T('noExclusion')),
       h('h3', null, T('overlaps', { n: r.overlaps.length })),
       list(r.overlaps, o => [o.policyName, meta(family(o.family), T(o.mode === 'exclude' ? 'overlap.exclude' : 'overlap.include', { group: o.group }))], T('noOverlap')),
       r.truncated && h('p', 'm', T('truncated')),
