@@ -19,7 +19,7 @@ Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111)
 | **Assignment Search** | Bouton flottant : stratégies et applications affectées à un groupe, un utilisateur ou un appareil (groupes imbriqués, exclusions, filtres), ou sans affectation, avec export JSON. Lecture seule. |
 | **Change Snapshot** | Journal local des modifications de stratégies faites dans le portail : diff avant / après, auteur, n° de ticket, export JSON / CSV. |
 | **Set Tenant Language** | Boutons « 🌐 » empilés à gauche des pastilles du menu : rechargent l'onglet de la console dans la Langue 1 ou la Langue 2 prédéfinies. |
-| **Raccourci PIM** | Boutons violets « 🔑 PIM éligible » / « 🔑 PIM actif » du menu : ouvrent PIM > Mes rôles sur le tenant détecté dans l'onglet actif. |
+| **Raccourci PIM** | Boutons violets « 🔑 PIM éligible » / « 🔑 PIM actif » du menu : ouvrent PIM > Mes rôles sur le tenant détecté dans l'onglet actif. Deuxième ligne : raccourcis Entra ID, Intune et Defender, même tenant. |
 | **Policy Import** | Bouton flottant, **désactivé par défaut** : crée des stratégies Intune à partir d'exports JSON As-Built, avec groupe et scope tags en option. Écrit dans le tenant. |
 | **Bulk Assignment** | Bouton flottant, **désactivé par défaut** : ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. Écrit dans le tenant. |
 | **Scope Tags Clean up** | Bouton flottant, **désactivé par défaut** : retire un scope tag choisi dans une liste (Default ou un autre) des stratégies et applications qui en gardent au moins un autre. Écrit dans le tenant. |
@@ -131,7 +131,7 @@ tenant-compass/
 │   ├── lib.js                    Set Tenant Language : LANGUAGES (24), FORMATS (30), isPortal(), portalUrl() (chargé par le popup)
 │   └── test.js                   Tests Node
 └── pim/
-    ├── lib.js                    Raccourci PIM : pimUrl(), selectActiveTab() (chargé par le popup et le service worker)
+    ├── lib.js                    Raccourci PIM : pimUrl(), portalUrl(), selectActiveTab() (chargé par le popup et le service worker)
     └── test.js                   Tests Node
 ```
 
@@ -500,9 +500,11 @@ Les paramètres `l=` et `mkt=` sont des comportements **observés**, **non docum
 
 **Aucun appel Graph.** **Stockage** : lecture seule de `t<tabId>`.
 
-**UI.** Rangée `.pim-row` sous les pastilles : deux boutons pleine largeur, fond `#773adc` (violet de l'icône PIM du portail Azure, texte blanc 5,9:1).
+**Raccourcis de portails.** Deuxième rangée `.pim-row`, même bascule `pim` : `withSignals` lit le même état Tenant Guard, puis `Pim.portalUrl(produit, signals)` donne l'adresse et `chrome.tabs.create` l'ouvre. `entra` : `https://portal.azure.com/#@<tenant>/view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Overview` ; `intune` : `https://intune.microsoft.com/#@<tenant>` (même shell que le portail Azure, préfixe **à vérifier**) ; `defender` : `https://security.microsoft.com/?tid=<GUID>`, sans paramètre si seul un domaine est connu (**à vérifier**). Produit inconnu : `null`.
 
-**Tests.** `pim/test.js` : adresse sans tenant, avec GUID (en minuscules), avec domaine `*.onmicrosoft.com`, nom d'affichage jamais repris dans l'adresse.
+**UI.** Rangée `.pim-row` sous les pastilles : deux boutons pleine largeur, fond `#773adc` (violet de l'icône PIM du portail Azure, texte blanc 5,9:1). Dessous, trois boutons `.portal` à la couleur de chaque produit : Entra ID `#074793` (bleu foncé de l'icône), Intune `#5b5fc7` (aucune valeur officielle trouvée, **à vérifier**), Defender `#0078d4` (charte Microsoft 365 FY27) ; texte blanc, contraste ≥ 4,5:1.
+
+**Tests.** `pim/test.js` : adresse sans tenant, avec GUID (en minuscules), avec domaine `*.onmicrosoft.com`, nom d'affichage jamais repris dans l'adresse ; `portalUrl` pour les trois produits (Defender : GUID seulement), produit inconnu.
 
 ### 4.7 Settings Explainer
 
@@ -682,7 +684,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 `popup.html` sert de popup (580 px) et de page d'options ouverte en onglet (`options_ui`). Captures : `docs/img/readme/<fr|en>/07-menu.jpg` (vue principale), `08-menu-parametres.jpg` et `09-menu-parametres-suite.jpg` (paramètres ouverts), `10-tenant-guard-couleurs.jpg` (choix de couleur).
 
 - **En-tête** : icône, titre, sélecteur **FR / EN** (`[data-lang]`, `aria-pressed`), bouton **⚙** (`#gear`).
-- **Vue principale** : `.strip` en flex, sans carte. À gauche, la colonne `#pl-col` de Set Tenant Language (un bouton « 🌐 <LANGUE> » par préréglage, empilés, section 4.6). À droite, les pastilles `#active-list.chips`, une par fonction active sauf Set Tenant Language et PIM : nom, description en infobulle (`title`), et une action rapide en icône dans la pastille si `ACTIONS[clé]` existe (`changeSnapshot` → 📋 journal). Message `#none` si aucune fonction n'est active. Dessous, la rangée `.pim-row` (« 🔑 PIM éligible » / « 🔑 PIM actif », section 4.6 bis) et le bouton de rechargement `#reload-btn` (voir 5.2). Puis, si Tenant Guard est actif, les cartes « onglet actuel » (`#current` : signaux détectés, bouton « Référencer ») et « tenants référencés » (tableau, export, import, mes couleurs), modifiables sans passer par ⚙.
+- **Vue principale** : `.strip` en flex, sans carte. À gauche, la colonne `#pl-col` de Set Tenant Language (un bouton « 🌐 <LANGUE> » par préréglage, empilés, section 4.6). À droite, les pastilles `#active-list.chips`, une par fonction active sauf Set Tenant Language et PIM : nom, description en infobulle (`title`), et une action rapide en icône dans la pastille si `ACTIONS[clé]` existe (`changeSnapshot` → 📋 journal). Message `#none` si aucune fonction n'est active. Dessous, la rangée `.pim-row` (« 🔑 PIM éligible » / « 🔑 PIM actif », section 4.6 bis), puis celle des raccourcis Entra ID / Intune / Defender et le bouton de rechargement `#reload-btn` (voir 5.2). Puis, si Tenant Guard est actif, les cartes « onglet actuel » (`#current` : signaux détectés, bouton « Référencer ») et « tenants référencés » (tableau, export, import, mes couleurs), modifiables sans passer par ⚙.
 - **Paramètres** (⚙ bascule `#settings`, affiché juste sous les pastilles) : bascules des fonctions avec description (`#toggles`, générées depuis `DEFAULTS` ; Settings Explainer en retrait sous Setting Inspector), carte « Carte de paramètre » (`.se-only`, délai avant fermeture de la carte, affichée dès qu'un des trois modules est actif), carte Set Tenant Language (`.pl-only`, Langue 1 et Langue 2, deux listes chacune) et carte « Affichage » avec « Positions par défaut ».
 - Les cartes `.tg-only` (onglet actuel et tenants) sont masquées si Tenant Guard est désactivé ; la colonne et la carte `.pl-only` si Set Tenant Language l'est ; la rangée `.pim-only` si le Raccourci PIM l'est.
 - Changer de langue appelle `setLang()`, pose le drapeau `sessionStorage` `langChanged` puis `location.reload()` : les textes de `tenant-guard/options.js` sont construits une seule fois, après `i18nReady` (langue enregistrée connue). Au rechargement, le drapeau est consommé et affiche `#reload-btn`.
@@ -701,7 +703,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 **Menu.**
 
-- `shared/i18n.js`, chargé en premier par `popup.html` : dictionnaire `I18N` avec deux langues, `fr` (Français) et `en` (English US), mêmes clés (93 : `menu.*`, `f.<clé>`, `f.<clé>.desc`, `tg.*`, `pl.*`).
+- `shared/i18n.js`, chargé en premier par `popup.html` : dictionnaire `I18N` avec deux langues, `fr` (Français) et `en` (English US), mêmes clés (99 : `menu.*`, `pim.*`, `go.*`, `f.<clé>`, `f.<clé>.desc`, `tg.*`, `pl.*`).
 - `t(key, vars)` : texte dans la langue courante, repli sur `fr` puis sur la clé ; variables `{nom}`. `applyI18n()` remplit `[data-i18n]` (`textContent`) et `[data-i18n-title]` (`title`) et pose `<html lang>` (`fr-FR` / `en-US`). `setLang(lang)` écrit `chrome.storage.sync` `lang`. `i18nReady` se résout quand la langue stockée est lue ; `popup.js` l'attend avant le premier rendu.
 - Défaut sans valeur stockée : `fr` si `navigator.language` commence par `fr`, sinon `en` (même règle dans `background.js` et `journal.js`).
 

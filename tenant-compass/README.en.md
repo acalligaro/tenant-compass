@@ -49,7 +49,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Assignment Search | Policies and apps assigned to a group, a user or a device (nested groups, exclusions, filters), or with no assignment; JSON export | Button above Assignment Lens (Intune) |
 | Change Snapshot | Local change log: before / after diff, author, ticket number, JSON / CSV export | Window at the bottom right after a save; log from the menu |
 | Set Tenant Language | Switches the console between two preset languages in one click | 🌐 buttons in the menu; Intune, Azure, Entra, Defender, Purview |
-| PIM shortcut | Opens PIM > My roles (eligible or active assignments) on the active tab's tenant in one click | 🔑 PIM eligible and 🔑 PIM active buttons in the menu |
+| PIM shortcut | Opens PIM > My roles (eligible or active assignments), Entra ID, Intune or Defender on the active tab's tenant in one click | 🔑 PIM eligible, 🔑 PIM active, 🪪 Entra ID, 💻 Intune and 🛡️ Defender buttons in the menu |
 | Policy Import | Creates policies from As-Built JSON exports, with optional assignment (group, all users, all devices) and scope tags. **Writes to the tenant: off by default** | Import button, above Assignment Search (Intune) |
 | Bulk Assignment | Adds an assignment (group, all users, all devices), a filter and scope tags to several policies. **Writes to the tenant: off by default** | Bulk Assign button, above Import (Intune) |
 | Scope Tags Clean up | Removes a scope tag picked from a list (Default or another one) from policies and apps that keep at least one other. **Writes to the tenant: off by default** | Scope Tags button, above Bulk Assign (Intune) |
@@ -80,7 +80,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 
 ## Menu
 
-Click the extension icon. On the left, the **🌐 FR / 🌐 EN** column switches the console between the two preset languages ([Set Tenant Language](#set-tenant-language)); on the right, the active feature pills (description on hover, 📋 opens the Change Snapshot log). Below, the purple **🔑 PIM eligible** and **🔑 PIM active** buttons ([PIM shortcut](#pim-shortcut)). When Tenant Guard is on, the tenant detected in the tab and the list of known tenants can be edited right there.
+Click the extension icon. On the left, the **🌐 FR / 🌐 EN** column switches the console between the two preset languages ([Set Tenant Language](#set-tenant-language)); on the right, the active feature pills (description on hover, 📋 opens the Change Snapshot log). Below, the purple **🔑 PIM eligible** and **🔑 PIM active** buttons, then the **🪪 Entra ID**, **💻 Intune** and **🛡️ Defender** row ([PIM shortcut](#pim-shortcut)). When Tenant Guard is on, the tenant detected in the tab and the list of known tenants can be edited right there.
 
 ![Menu: console language column, active feature pills, PIM eligible and PIM active buttons, current tab and known tenants](docs/img/readme/en/07-menu.jpg)
 
@@ -311,6 +311,12 @@ Two purple menu buttons (the Azure portal's PIM icon color, `#773adc`) open *Pri
 - **🔑 PIM active**: *Active assignments* tab, to see current roles, deactivate or extend them. No address opens this tab directly: the extension selects it once the page has loaded (the page's 2nd tab, whatever the portal language). If Microsoft asks to sign in again, the page opens on *Eligible assignments*.
 
 When Tenant Guard has detected the active tab's tenant (tenant ID or `*.onmicrosoft.com` domain), PIM opens on **that** tenant (Azure `#@<tenant>/` prefix), not on the account's home tenant: useful for a consultant working on a customer tenant. Otherwise, PIM opens on the account's default tenant.
+
+A second row opens the portals, on the same tenant, each in the color of its icon:
+
+- **🪪 Entra ID**: Microsoft Entra ID in the Azure portal (`portal.azure.com`, `#@<tenant>/` prefix), `#074793` background.
+- **💻 Intune**: Intune admin center (`intune.microsoft.com`, `#@<tenant>` prefix), `#5b5fc7` background.
+- **🛡️ Defender**: Microsoft Defender portal (`security.microsoft.com`), `#0078d4` background. The tenant is passed (`?tid=`) only when its ID is known: a domain is not accepted there.
 
 - Address: `https://portal.azure.com/#@<tenant>/view/Microsoft_Azure_PIMCommon/ActivationMenuBlade/~/aadmigratedroles`. Tested on 2026-10-04 (both buttons); observed portal behavior, not documented on Microsoft Learn.
 - Code: `pim/lib.js` (tested: `node pim/test.js`), active tab selection in `background.js`.

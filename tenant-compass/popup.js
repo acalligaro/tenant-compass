@@ -81,18 +81,25 @@ function render() {
   for (const b of document.querySelectorAll('[data-lang]')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
 }
 
-// PIM: My roles in the tenant Tenant Guard detected in the active tab (see pim/lib.js). "Active" selects its tab in background.js.
-function openPim(active) {
+// PIM and portal shortcuts: in the tenant Tenant Guard detected in the active tab (see pim/lib.js).
+function withSignals(open) {
   chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
     const st = tab && (await chrome.storage.session.get('t' + tab.id))['t' + tab.id];
-    const url = Pim.pimUrl(st?.signals);
+    open(st?.signals);
+    window.close();
+  });
+}
+// "Active" selects its tab in background.js.
+function openPim(active) {
+  withSignals(signals => {
+    const url = Pim.pimUrl(signals);
     if (active) chrome.runtime.sendMessage({ type: 'pimActive', url });
     else chrome.tabs.create({ url });
-    window.close();
   });
 }
 $id('pim-eligible').onclick = () => openPim(false);
 $id('pim-active').onclick = () => openPim(true);
+for (const p of ['entra', 'intune', 'defender']) $id('go-' + p).onclick = () => withSignals(signals => chrome.tabs.create({ url: Pim.portalUrl(p, signals) }));
 
 $id('gear').onclick = () => {
   const open = $id('settings').hidden;

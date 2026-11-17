@@ -33,6 +33,13 @@
     .pim-row { display: flex; gap: 8px; margin: 0 0 10px; }
     button.pim { flex: 1; padding: 8px 12px; background: #773adc; color: #fff; }
     button.pim:hover { background: #6430c4; }
+    /* Portal shortcuts, color of each product's icon: Entra ID #074793 (dark blue of the icon), Defender #0078d4
+       (Microsoft 365 trademark guidelines FY27), Intune #5b5fc7 (no official value found, to confirm). White text >= 4.5:1. */
+    button.portal { flex: 1; padding: 8px 12px; color: #fff; }
+    button.portal:hover { filter: brightness(1.15); }
+    button.entra { background: #074793; }
+    button.intune { background: #5b5fc7; }
+    button.defender { background: #0078d4; }
     td button { padding: 4px 9px; background: none; color: var(--muted); }
     td button:hover { background: #fde7e9; color: #a4262c; }
     .pick { position: relative; }
@@ -111,6 +118,11 @@
   <div class="pim-row pim-only">
     <button type="button" id="pim-eligible" class="pim" data-i18n="pim.eligible" data-i18n-title="pim.eligible.title"></button>
     <button type="button" id="pim-active" class="pim" data-i18n="pim.active" data-i18n-title="pim.active.title"></button>
+  </div>
+  <div class="pim-row pim-only">
+    <button type="button" id="go-entra" class="portal entra" data-i18n="go.entra" data-i18n-title="go.entra.title"></button>
+    <button type="button" id="go-intune" class="portal intune" data-i18n="go.intune" data-i18n-title="go.intune.title"></button>
+    <button type="button" id="go-defender" class="portal defender" data-i18n="go.defender" data-i18n-title="go.defender.title"></button>
   </div>
 
   <div id="settings" hidden>

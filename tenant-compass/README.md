@@ -49,7 +49,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Assignment Search | Stratégies et applications affectées à un groupe, un utilisateur ou un appareil (groupes imbriqués, exclusions, filtres), ou sans affectation ; export JSON | Bouton au-dessus d'Assignment Lens (Intune) |
 | Change Snapshot | Journal local des modifications : différence avant / après, auteur, n° de ticket, export JSON / CSV | Fenêtre en bas à droite après un enregistrement ; journal depuis le menu |
 | Set Tenant Language | Bascule la console entre deux langues prédéfinies, en 1 clic | Boutons 🌐 du menu ; Intune, Azure, Entra, Defender, Purview |
-| Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives) sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible et 🔑 PIM actif du menu |
+| Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives), Entra ID, Intune ou Defender sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible, 🔑 PIM actif, 🪪 Entra ID, 💻 Intune et 🛡️ Defender du menu |
 | Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec affectation (groupe, tous les utilisateurs, tous les appareils) et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, au-dessus d'Assignment Search (Intune) |
 | Bulk Assignment | Ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. **Écrit dans le tenant : désactivée par défaut** | Bouton Bulk Assign, au-dessus d'Import (Intune) |
 | Scope Tags Clean up | Retire un scope tag choisi dans une liste (Default ou un autre) des stratégies et applications qui en gardent au moins un autre. **Écrit dans le tenant : désactivée par défaut** | Bouton Scope Tags, au-dessus de Bulk Assign (Intune) |
@@ -80,7 +80,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 
 ## Menu
 
-Clic sur l'icône de l'extension. À gauche, la colonne **🌐 FR / 🌐 EN** bascule la console entre les deux langues prédéfinies ([Set Tenant Language](#set-tenant-language)) ; à droite, les pastilles des fonctions actives (description au survol, 📋 ouvre le journal de Change Snapshot). Dessous, les boutons violets **🔑 PIM éligible** et **🔑 PIM actif** ([Raccourci PIM](#raccourci-pim)). Si Tenant Guard est actif, le tenant détecté dans l'onglet et la liste des tenants référencés restent modifiables directement.
+Clic sur l'icône de l'extension. À gauche, la colonne **🌐 FR / 🌐 EN** bascule la console entre les deux langues prédéfinies ([Set Tenant Language](#set-tenant-language)) ; à droite, les pastilles des fonctions actives (description au survol, 📋 ouvre le journal de Change Snapshot). Dessous, les boutons violets **🔑 PIM éligible** et **🔑 PIM actif**, puis la ligne **🪪 Entra ID**, **💻 Intune** et **🛡️ Defender** ([Raccourci PIM](#raccourci-pim)). Si Tenant Guard est actif, le tenant détecté dans l'onglet et la liste des tenants référencés restent modifiables directement.
 
 ![Menu : colonne des langues de la console, pastilles des fonctions actives, boutons PIM éligible et PIM actif, onglet actuel et tenants référencés](docs/img/readme/fr/07-menu.jpg)
 
@@ -313,6 +313,12 @@ Deux boutons violets du menu (la couleur de l'icône PIM du portail Azure, `#773
 - **🔑 PIM actif** : onglet *Affectations actives*, pour voir les rôles en cours, les désactiver ou les prolonger. Aucune adresse n'ouvre directement cet onglet : l'extension le sélectionne une fois la page chargée (2e onglet de la page, quelle que soit la langue du portail). Si Microsoft demande de se reconnecter, la page s'ouvre sur *Affectations éligibles*.
 
 Si Tenant Guard a détecté le tenant de l'onglet actif (ID de tenant ou domaine `*.onmicrosoft.com`), PIM s'ouvre sur **ce** tenant (préfixe Azure `#@<tenant>/`), pas sur le tenant d'origine du compte : utile pour un prestataire qui travaille sur le tenant d'un client. Sinon, PIM s'ouvre sur le tenant par défaut du compte.
+
+Une deuxième ligne ouvre les portails, sur le même tenant, chacun à la couleur de son icône :
+
+- **🪪 Entra ID** : Microsoft Entra ID dans le portail Azure (`portal.azure.com`, préfixe `#@<tenant>/`), fond `#074793`.
+- **💻 Intune** : centre d'administration Intune (`intune.microsoft.com`, préfixe `#@<tenant>`), fond `#5b5fc7`.
+- **🛡️ Defender** : portail Microsoft Defender (`security.microsoft.com`), fond `#0078d4`. Le tenant n'est passé (`?tid=`) que si son ID est connu : un domaine n'y est pas accepté.
 
 - Adresse : `https://portal.azure.com/#@<tenant>/view/Microsoft_Azure_PIMCommon/ActivationMenuBlade/~/aadmigratedroles`. Testé le 2026-10-04 (les deux boutons) ; comportement observé du portail, non documenté sur Microsoft Learn.
 - Code : `pim/lib.js` (testé : `node pim/test.js`), sélection de l'onglet actif dans `background.js`.
