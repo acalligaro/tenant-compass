@@ -125,7 +125,7 @@
     renderResults();
   }
 
-  // User, device or group open in the portal: picked and analysed at once (its ID goes through the usual search).
+  // User, device or group open in⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ the portal: picked and analysed at once (its ID goes through the usual search).
   // Checked when the panel opens, then every second: the shell changes blades with pushState, which fires no event.
   let pageKey = '';
   function syncPage() {
@@ -161,27 +161,41 @@
     ].filter(Boolean).join(' · ');
   }
 
+  // Category filter of the results (Configuration, Compliance, Applications, Scripts): kept from one object to the next.
+  let category = '';
+  const shownRows = () => (view ? view.rows.filter(r => !category || L.categoryOf(r.kind) === category) : []);
+  function renderCategories() {
+    const n = c => view.rows.filter(r => L.categoryOf(r.kind) === c).length;
+    ui.cat.replaceChildren(option('', t('cat.all', { n: view.rows.length })), ...L.CATEGORIES.map(c => option(c, t('cat.' + c, { n: n(c) }))));
+    ui.cat.value = category;
+  }
+
   // Text only goes through textContent: no HTML parsing of Graph data.
   function renderResults() {
     if (!panel) return;
-    ui.export.disabled = !view?.rows.length;
+    const rows = shownRows();
+    ui.export.disabled = !rows.length;
+    ui.catRow.hidden = !view;
     if (!view) return ui.results.replaceChildren();
+    renderCategories();
     const row = r => el('div', { className: 'row' }, el('div', { textContent: r.name }),
       el('small', { textContent: [r.type, r.platform].filter(Boolean).join(' · ') }),
       ...(r.via || []).map(v => el('small', { className: v.mode === 'exclude' ? 'ex' : 'in', textContent: viaText(v) })));
     const section = (title, list) => [el('h3', { textContent: title }), ...(list.length ? list.map(row) : [el('p', { className: 'm', textContent: t('res.empty') })])];
     if (view.type === 'unassigned') {
-      return ui.results.replaceChildren(el('p', { className: 'm', textContent: t('res.unassignedHint') }), ...section(t('res.unassigned', { n: view.rows.length }), view.rows));
+      return ui.results.replaceChildren(el('p', { className: 'm', textContent: t('res.unassignedHint') }), ...section(t('res.unassigned', { n: rows.length }), rows));
     }
-    const inc = view.rows.filter(r => r.state === 'included'), exc = view.rows.filter(r => r.state === 'excluded');
+    const inc = rows.filter(r => r.state === 'included'), exc = rows.filter(r => r.state === 'excluded');
     ui.results.replaceChildren(...(view.warn ? [el('p', { className: 'warn', textContent: view.warn })] : []),
       ...section(t('res.included', { n: inc.length }), inc), ...section(t('res.excluded', { n: exc.length }), exc));
   }
 
+  // The list shown: with a category chosen, only its rows, and the category is named in the file.
   function exportJson() {
-    if (!view?.rows.length) return;
+    const rows = shownRows();
+    if (!rows.length) return;
     const now = new Date().toISOString();
-    const doc = L.exportDoc({ type: view.type, subject: view.subject, memberships: view.memberships, rows: view.rows, tenantId: loadedTid, exportedAt: now,
+    const doc = L.exportDoc({ type: view.type, subject: view.subject, memberships: view.memberships, rows, tenantId: loadedTid, exportedAt: now, category,
       coverage: { failedTypes: failed.map(label), unreadObjects: view.unread, ...(view.warn ? { warning: view.warn } : {}) } },
     { group: groupName, filter: id => filters.get(id) || '' });
     const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' })), download: L.exportName(view.type, view.subject?.name, now.slice(0, 10)) });
@@ -241,6 +255,8 @@
     ui.pick = el('select', { title: t('ui.pickTitle'), ariaLabel: t('ui.pickTitle'), onchange: analyse });
     ui.searchRow = el('div', { className: 'bar' }, ui.search);
     ui.pickRow = el('div', { className: 'bar' }, ui.pick);
+    ui.cat = el('select', { title: t('ui.category'), ariaLabel: t('ui.category'), onchange: () => { category = ui.cat.value; renderResults(); } });
+    ui.catRow = el('div', { className: 'bar', hidden: true }, ui.cat);
     ui.results = el('div', { className: 'list' });
     ui.status = el('div', { className: 'status', role: 'status' });
     ui.export = el('button', { className: 'act', textContent: t('ui.export'), title: t('ui.exportTitle'), disabled: true, onclick: exportJson });
@@ -249,7 +265,7 @@
       el('button', { className: 'x', textContent: '↻', title: t('ui.refresh'), ariaLabel: t('ui.refresh'), onclick: refresh }),
       el('button', { className: 'x', textContent: '×', title: t('ui.close'), ariaLabel: t('ui.close'), onclick: toggle })));
     panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.type),
-      ui.searchRow, ui.pickRow, ui.results, el('div', { className: 'foot' }, ui.status, ui.export));
+      ui.searchRow, ui.pickRow, ui.catRow, ui.results, el('div', { className: 'foot' }, ui.status, ui.export));
     ui.root.append(panel);
     opened();
     if (window.__tenantCompassDrag) window.__tenantCompassDrag(panel, head, 'assignment-search-panel');

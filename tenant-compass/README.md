@@ -173,6 +173,7 @@ Bouton **Assignment Search** en bas à gauche, au-dessus d'Assignment Lens. Il r
 3. Choisir l'objet dans la liste. Le panneau affiche les stratégies et applications qui le ciblent, en deux parties : **Inclus** et **Exclus**.
 4. **Exporter (JSON)** télécharge la liste affichée.
 
+- **Filtre par type** : au-dessus des résultats, une liste déroulante ne garde qu'une catégorie, avec son nombre d'objets : **Configuration** (catalogue de paramètres, profils, ADMX, inscription, Autopilot, mises à jour Windows), **Conformité**, **Applications** (applications, configuration et protection d'applications), **Scripts et remédiations**. Le choix est gardé d'un objet à l'autre, et l'export ne contient que la catégorie affichée.
 - **Objet ouvert** : sur la page d'un utilisateur, d'un appareil ou d'un groupe du portail, le panneau le choisit et l'analyse dès l'ouverture. Il suit ensuite la navigation : ouvrir un autre utilisateur, appareil ou groupe relance l'analyse.
 - **Ce qui compte** :
   - groupe : ses affectations directes et celles de ses groupes parents (quand il est membre d'un autre groupe). Ni « Tous les utilisateurs », ni « Tous les appareils » ;

@@ -14,6 +14,12 @@ for (const k of L.KINDS) assert.match(L.listUrl(k), /^https:\/\/graph\.microsoft
 for (const k of ['', 'ca', '__proto__', 'constructor', null, undefined]) assert.strictEqual(L.listUrl(k), null, String(k));
 assert.ok(!L.listUrl('app').includes('isAssigned')); // unassigned apps must show too
 
+// Result filter: every type read has one of the 4 broad categories
+assert.deepStrictEqual(L.CATEGORIES, ['config', 'compliance', 'apps', 'scripts']);
+for (const k of L.KINDS) assert.ok(L.CATEGORIES.includes(L.categoryOf(k)), k);
+assert.deepStrictEqual(['enr', 'ap', 'wufu', 'admx', 'comp', 'mamIos', 'appcfg', 'rem', 'cattr'].map(L.categoryOf), ['config', 'config', 'config', 'config', 'compliance', 'apps', 'apps', 'scripts', 'scripts']);
+for (const k of ['', 'ca', '__proto__', 'constructor', null]) assert.strictEqual(L.categoryOf(k), null, String(k));
+
 // ---------- search ----------
 
 assert.strictEqual(L.searchUrl('group', ''), ROOT + 'groups?$select=id,displayName&$orderby=displayName&$top=100');
@@ -113,7 +119,8 @@ assert.deepStrictEqual(doc.results[1].via, [{ how: 'allUsers', target: 'allUsers
 assert.ok(!JSON.stringify(doc).includes('assignments')); // raw Graph objects stay out
 const plain = L.exportDoc({ type: 'unassigned', rows: [{ name: 'None', id: 'x', kind: 'dc', type: 'Profile' }], tenantId: 't', exportedAt: 'd', coverage: {} }, { group: () => '', filter: () => '' });
 assert.deepStrictEqual(plain.results, [{ name: 'None', id: 'x', kind: 'dc', type: 'Profile', platform: '' }]);
-assert.ok(!('subject' in plain) && !('memberships' in plain));
+assert.ok(!('subject' in plain) && !('memberships' in plain) && !('category' in plain));
+assert.strictEqual(L.exportDoc({ type: 'unassigned', rows: [], tenantId: 't', exportedAt: 'd', coverage: {}, category: 'apps' }, { group: () => '', filter: () => '' }).category, 'apps');
 
 assert.strictEqual(L.exportName('group', 'GRP / Sales: EU', '2026-11-17'), 'assignment-search-group-GRP_Sales_EU-2026-11-17.json');
 assert.strictEqual(L.exportName('unassigned', '', '2026-11-17'), 'assignment-search-unassigned-2026-11-17.json');

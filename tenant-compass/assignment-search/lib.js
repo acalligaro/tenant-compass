@@ -32,6 +32,14 @@
     ['wud', DM + 'windowsDriverUpdateProfiles?$expand=assignments'],
   ]);
   const listUrl = kind => (SOURCES.has(kind) ? SOURCES.get(kind) : null);
+
+  // Broad categories of the result filter, few on purpose: enrollment, Autopilot and Windows updates count as
+  // configuration; app configuration and app protection as applications.
+  const CATEGORIES = ['config', 'compliance', 'apps', 'scripts'];
+  const CATEGORY = new Map(Object.entries({ sc: 'config', dc: 'config', admx: 'config', ap: 'config', enr: 'config', wufu: 'config', wuq: 'config', wud: 'config',
+    comp: 'compliance', app: 'apps', appcfg: 'apps', mamcfg: 'apps', mamIos: 'apps', mamAndroid: 'apps', mamWin: 'apps',
+    ps: 'scripts', sh: 'scripts', cattr: 'scripts', rem: 'scripts' }));
+  const categoryOf = kind => CATEGORY.get(kind) || null;
   const FILTERS_URL = DM + 'assignmentFilters?$select=id,displayName,platform';
 
   // ---------- the object searched: group, user or⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ managed device ----------
@@ -141,10 +149,11 @@
   // ---------- JSON export ----------
 
   // names: { group(id), filter(id) } -> display name. Rows of resolve()⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ or unassigned(), already labelled by the page.
-  function exportDoc({ type, subject, memberships, rows, tenantId, exportedAt, coverage }, names) {
+  // category: the result filter chosen, when not "all" (rows are then already filtered by the page).
+  function exportDoc({ type, subject, memberships, rows, tenantId, exportedAt, coverage, category }, names) {
     const target = ref => (ref === 'allUsers' || ref === 'allDevices' ? ref : { id: ref, name: names.group(ref) || ref });
     return {
-      exportedAt, tenantId, type,
+      exportedAt, tenantId, type, ...(category ? { category } : {}),
       ...(subject ? { subject: { id: subject.id, name: subject.name, ...(subject.detail ? { detail: subject.detail } : {}),
         ...(subject.entraId ? { entraDeviceId: subject.entraId } : {}) } } : {}),
       ...(memberships ? { memberships: memberships.map(g => ({ id: g.id, name: g.displayName || g.name || g.id })) } : {}),
@@ -165,7 +174,7 @@
     return ['assignment-search', type, safe, date].filter(Boolean).join('-') + '.json';
   }
 
-  const api = { KINDS: [...SOURCES.keys()], TYPES, LIMIT, FILTERS_URL, listUrl, searchUrl, found, memberOfUrl, pageRef, targetRef, assignmentsOf, resolve, unassigned, exportDoc, exportName };
+  const api = { KINDS: [...SOURCES.keys()], CATEGORIES, categoryOf, TYPES, LIMIT, FILTERS_URL, listUrl, searchUrl, found, memberOfUrl, pageRef, targetRef, assignmentsOf, resolve, unassigned, exportDoc, exportName };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.AssignmentSearchLib = api; // always: a stray `module` global must not hide the lib from the page
 })();
