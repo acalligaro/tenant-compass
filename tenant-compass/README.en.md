@@ -2,7 +2,7 @@
 
 *A toolbox for the Microsoft Intune admin center.* · [Version française](README.md)
 
-Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, PIM shortcut, Policy Import, Bulk Assignment and Scope Tags Clean up in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
+Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, PIM shortcut, Policy Import, Bulk Assignment and Scope Tags Clean up in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
 
 Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -21,6 +21,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 - [Tenant Guard](#tenant-guard)
 - [As-Built](#as-built-panel-in-the-portal)
 - [Assignment Lens](#assignment-lens)
+- [Assignment Search](#assignment-search)
 - [Setting Inspector](#setting-inspector)
 - [Settings Explainer](#settings-explainer)
 - [OpenIntuneBaseline](#openintunebaseline)
@@ -45,10 +46,11 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Settings Explainer | Same card, explanation section: written text, live Learn page, values, default. Can be used on its own | Same card |
 | OpenIntuneBaseline | Same card, OIB section: value set by the OpenIntuneBaseline community baseline and the policy concerned. Can be used on its own | Same card |
 | Assignment Lens | Included / excluded groups, members, filters, overlaps of the displayed policy | Button above As-Built |
+| Assignment Search | Policies and apps assigned to a group, a user or a device (nested groups, exclusions, filters), or with no assignment; JSON export | Button above Assignment Lens (Intune) |
 | Change Snapshot | Local change log: before / after diff, author, ticket number, JSON / CSV export | Window at the bottom right after a save; log from the menu |
 | Set Tenant Language | Switches the console between two preset languages in one click | 🌐 buttons in the menu; Intune, Azure, Entra, Defender, Purview |
 | PIM shortcut | Opens PIM > My roles (eligible or active assignments) on the active tab's tenant in one click | 🔑 PIM eligible and 🔑 PIM active buttons in the menu |
-| Policy Import | Creates policies from As-Built JSON exports, with optional group and scope tags. **Writes to the tenant: off by default** | Import button, above Assignment Lens (Intune) |
+| Policy Import | Creates policies from As-Built JSON exports, with optional group and scope tags. **Writes to the tenant: off by default** | Import button, above Assignment Search (Intune) |
 | Bulk Assignment | Adds an assignment (group, all users, all devices), a filter and scope tags to several policies. **Writes to the tenant: off by default** | Bulk Assign button, above Import (Intune) |
 | Scope Tags Clean up | Removes the Default scope tag from policies and apps that have another scope tag. **Writes to the tenant: off by default** | Scope Tags button, above Bulk Assign (Intune) |
 
@@ -65,7 +67,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 
 | Feature | Network traffic | Content |
 |---|---|---|
-| As-Built, Assignment Lens | Reads (`GET`) on `graph.microsoft.com`, with the portal session | The policies, apps and groups shown, as the portal itself does |
+| As-Built, Assignment Lens, Assignment Search | Reads (`GET`) on `graph.microsoft.com`, with the portal session | The policies, apps, groups, users and devices shown or searched, as the portal itself does |
 | Policy Import, if you turn it on | Reads existing names (`GET`) and creates (`POST`) on `graph.microsoft.com`, with the portal session | The policies of the files you choose and confirm, and if you ask their group and scope tags |
 | Bulk Assignment, if you turn it on | Reads (`GET`) policies, assignments, groups, filters and scope tags, then `POST …/assign` and `PATCH` (scope tags) on `graph.microsoft.com`, with the portal session | The policies you check, with their existing assignments |
 | Scope Tags Clean up, if you turn it on | Reads (`GET`) policies, apps and scope tags, then `PATCH` on `graph.microsoft.com`, with the portal session | The scope tags of the objects you check |
@@ -156,9 +158,31 @@ Tenant detection, by priority: URL (`tid=`, `tenantId=`, `ctid=`, `#@domain`), d
 
 ## Assignment Lens
 
-**Assignment Lens** button at the bottom left, just above As-Built. On an open policy or app, the card shows the included and excluded groups, member counts, filters, virtual targets (All users, All devices) and overlaps with other policies of the same family. ↻ refreshes; × or a click on the title closes the card. Drag the card by its header to move it.
+**Assignment Lens** button at the bottom left, just above As-Built. On an open policy or app, the card shows the included and excluded groups, member counts, filters, virtual targets (All users, All devices) and overlaps with other policies of the same family. ↻ refreshes; × or a click on the title closes the card. Drag the card by its header to move it. An empty group (0 members) shows in red: its assignment or exclusion has no effect.
 
 ![Assignment Lens on a LAPS policy: included, excluded, overlaps](docs/img/readme/en/05-assignment-lens.jpg)
+
+## Assignment Search
+
+**Assignment Search** button at the bottom left, above Assignment Lens. It answers the reverse question: what is assigned to this object?
+
+1. Choose the object type: **Group**, **User**, **Device**, or **Policies and apps without assignments**.
+2. Type the start of the group name, the start of the user's name or UPN, part of the device name, or paste an ID. The drop-down list first shows the tenant's first 100 objects, then those matching the text typed.
+3. Pick the object in the list. The panel shows the policies and apps that target it, in two parts: **Included** and **Excluded**.
+4. **Export (JSON)** downloads the list shown.
+
+- **What counts**:
+  - group: its direct assignments and those of its parent groups (when it is a member of another group). Neither "All users" nor "All devices";
+  - user: its groups, nested ones included, and "All users";
+  - device: the groups of its Entra ID object, nested ones included, and "All devices". The assignments of its primary user are not listed.
+- **Exclusion**: an exclusion that reaches the object wins, and the policy goes to **Excluded**. Each line names the group involved, the deployment type of an app (Required, Available…) and the assignment filter, if any. The filter is not evaluated: the object may be targeted, then left out by the filter.
+- **Types read**: settings catalog (endpoint security included), configuration profiles, compliance, administrative templates, apps, app configuration and app protection, PowerShell and shell scripts, macOS custom attributes, remediations, Autopilot profiles, enrollment (ESP, restrictions), Windows updates (feature, quality, driver). A type Graph refuses is named in the status line.
+- **Without assignments**: the objects read whole that have no assignment at all, apps included.
+- **Read only**: only `GET` requests on Graph, with the portal session. The lists are read once, at the first search; ↻ reads them again.
+- **Permissions**: besides Intune read access, the portal token must be able to read the object's groups (`transitiveMemberOf`: `GroupMember.Read.All`, `User.Read.All`, `Device.Read.All` or `Directory.Read.All` depending on the type). Otherwise, the panel says so and lists only the direct assignments, "All users" or "All devices".
+- **JSON export**: the object searched, its groups, then each policy with its type, OS, state (included or excluded) and the assignments that reach it (group, mode, deployment type, filter). Types not read are listed in `coverage`.
+
+- Code: `assignment-search/lib.js` (tested: `node assignment-search/test.js`), `assignment-search/page.js`, `shared/graph-bridge.js`.
 
 ## Setting Inspector
 
@@ -296,7 +320,7 @@ When Tenant Guard has detected the active tab's tenant (tenant ID or `*.onmicros
 
 It creates Intune policies from As-Built JSON exports, without PowerShell, without an app registration and without Graph Explorer. The calls still go through Microsoft Graph, with the portal session.
 
-1. Click **Import**, above the Assignment Lens button, then choose one or more `.json` files.
+1. Click **Import**, above the Assignment Search button, then choose one or more `.json` files.
 2. Check the preview: each row shows the type, the warnings and what blocks it. Nothing is written at this step.
 3. Click **Import (n)**, check the directory and tenant shown, then click **OK**.
 
@@ -376,20 +400,21 @@ Like As-Built, it shows a list. This one shows each policy and app holding the D
 
 ## Moving panels
 
-As-Built, Assignment Lens, Policy Import, Bulk Assignment and Scope Tags Clean up do not open at the same time: opening one closes the others, except the pinned ones.
+As-Built, Assignment Lens, Assignment Search, Policy Import, Bulk Assignment and Scope Tags Clean up do not open at the same time: opening one closes the others, except the pinned ones.
 
 **Pin**: the 📌 button in the header keeps the panel open when another module opens. Click it again to unpin; **×** always closes the panel. The pin lasts until the page reloads. The panel opened or clicked last comes above the others.
 
-The buttons and panels of these five modules can be moved with the mouse (button: drag; panel: drag the header). The position is stored per element in the portal's `localStorage` (`tenant-compass:pos:*` keys), shared code in `shared/drag.js`. The **Reset positions** button in the menu clears these keys in the active tab and reloads it.
+The buttons and panels of these six modules can be moved with the mouse (button: drag; panel: drag the header). The position is stored per element in the portal's `localStorage` (`tenant-compass:pos:*` keys), shared code in `shared/drag.js`. The **Reset positions** button in the menu clears these keys in the active tab and reloads it.
 
 ## How it works
 
-`background.js` dynamically registers (`chrome.scripting.registerContentScripts`) the scripts of the checked features, based on the `chrome.storage.sync` key `features` (all on by default, except Policy Import, Bulk Assignment and Scope Tags Clean up). Each feature lives in its own folder (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), with a `lib.js` testable under Node and a `test.js`. The shared style (#0078d4 → #5b5fc7 gradient) and dragging (`shared/drag.js`) are common. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
+`background.js` dynamically registers (`chrome.scripting.registerContentScripts`) the scripts of the checked features, based on the `chrome.storage.sync` key `features` (all on by default, except Policy Import, Bulk Assignment and Scope Tags Clean up). Each feature lives in its own folder (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `assignment-search/`, `change-snapshot/`, `portal-language/`…), with a `lib.js` testable under Node and a `test.js`. The shared style (#0078d4 → #5b5fc7 gradient) and dragging (`shared/drag.js`) are common. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Limitations
 
 - Tenants added in the standalone Tenant Guard extension are not carried over: storage is per extension, they must be entered again.
 - Assignment Lens only works on `intune.microsoft.com` (not `endpoint.microsoft.com`).
+- Assignment Search does not evaluate assignment filters and does not simulate adding or removing a group. It does not read the old endpoint security templates (`intents`) nor Windows 365. Groups and users are searched by the start of the name, not by a word in the middle.
 - OpenIntuneBaseline: the card shows a snapshot of the baseline (commit in `setting-inspector/data/OIB-NOTICE.md`), to rebuild at each OIB release; only Settings Catalog policies are included (not compliance or update policies).
 - In a portal iframe, the setting card docks to the iframe's right edge, not the window's.
 - Settings Explainer level 2 depends on the structure of the Learn pages; if it changes, the card keeps levels 1 and 3.
@@ -403,6 +428,7 @@ cd ../as-built && node test.js
 cd ../setting-inspector && node test.js
 cd ../settings-explainer && node test.js
 cd ../assignment-lens && node test.js
+cd ../assignment-search && node test.js
 cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
 cd ../policy-import && node test.js

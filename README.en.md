@@ -10,7 +10,7 @@ Chrome / Edge extension (Manifest V3), toolbox for the Microsoft Intune portal. 
 
 | Folder | Extension | Role |
 |---|---|---|
-| [`tenant-compass/`](tenant-compass/README.en.md) ([Français](tenant-compass/README.md)) | **Tenant Compass** | Tenant Guard, As-Built, setting card (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Change Snapshot, Set Tenant Language, PIM shortcut, Policy Import, Bulk Assignment and Scope Tags Clean up in a single extension, each toggled separately from the menu, in French or English |
+| [`tenant-compass/`](tenant-compass/README.en.md) ([Français](tenant-compass/README.md)) | **Tenant Compass** | Tenant Guard, As-Built, setting card (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, PIM shortcut, Policy Import, Bulk Assignment and Scope Tags Clean up in a single extension, each toggled separately from the menu, in French or English |
 
 Tenant Compass technical documentation (in French): [`tenant-compass/ARCHITECTURE.md`](tenant-compass/ARCHITECTURE.md).
 
@@ -39,7 +39,7 @@ node tenant-compass/scope-cleanup/test.js
 ## Security
 
 - The portal's access token is never stored, nor sent anywhere other than `graph.microsoft.com`.
-- As-Built and Assignment Lens only read from Graph (`GET`).
+- As-Built, Assignment Lens and Assignment Search only read from Graph (`GET`).
 - Policy Import, Bulk Assignment and Scope Tags Clean up, off by default, are the only features that write: creating policies, adding assignments or scope tags, removing the Default scope tag, after confirmation.
 - Graph data is never injected as HTML.
 - Details per feature in each README and in `ARCHITECTURE.md`.

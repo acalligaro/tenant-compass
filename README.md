@@ -10,7 +10,7 @@ Extension Chrome / Edge (Manifest V3), boîte à outils pour le portail Microsof
 
 | Dossier | Extension | Rôle |
 |---|---|---|
-| [`tenant-compass/`](tenant-compass/README.md) ([English](tenant-compass/README.en.md)) | **Tenant Compass** | Tenant Guard, As-Built, carte de paramètre (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Change Snapshot, Set Tenant Language, Raccourci PIM, Policy Import, Bulk Assignment et Scope Tags Clean up dans une seule extension, activables séparément depuis le menu, en français ou en anglais |
+| [`tenant-compass/`](tenant-compass/README.md) ([English](tenant-compass/README.en.md)) | **Tenant Compass** | Tenant Guard, As-Built, carte de paramètre (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, Raccourci PIM, Policy Import, Bulk Assignment et Scope Tags Clean up dans une seule extension, activables séparément depuis le menu, en français ou en anglais |
 
 Documentation technique de Tenant Compass : [`tenant-compass/ARCHITECTURE.md`](tenant-compass/ARCHITECTURE.md).
 
@@ -39,7 +39,7 @@ node tenant-compass/scope-cleanup/test.js
 ## Sécurité
 
 - Le jeton d'accès du portail n'est jamais enregistré ni envoyé ailleurs qu'à `graph.microsoft.com`.
-- As-Built et Assignment Lens ne font que des lectures Graph (`GET`).
+- As-Built, Assignment Lens et Assignment Search ne font que des lectures Graph (`GET`).
 - Policy Import, Bulk Assignment et Scope Tags Clean up, désactivées par défaut, sont les seules fonctions qui écrivent : création de stratégies, ajout d'affectations ou de scope tags, retrait du scope tag Default, après confirmation.
 - Les données Graph ne sont jamais injectées comme HTML.
 - Détails par extension dans chaque README et dans `ARCHITECTURE.md`.

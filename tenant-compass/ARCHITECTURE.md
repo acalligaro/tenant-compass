@@ -1,12 +1,12 @@
 # Tenant Compass : architecture
 
-Document destiné aux mainteneurs. Il décrit ce que fait réellement le code de `tenant-compass/` (version `0.13.0` du manifeste). Les points non confirmés par la lecture du code sont marqués **à vérifier**.
+Document destiné aux mainteneurs. Il décrit ce que fait réellement le code de `tenant-compass/` (version `0.14.0` du manifeste). Les points non confirmés par la lecture du code sont marqués **à vérifier**.
 
 ---
 
 ## 1. Vue d'ensemble
 
-Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111) qui ajoute douze fonctions au portail d'administration Microsoft, chacune activable séparément depuis le menu (popup) :
+Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111) qui ajoute treize fonctions au portail d'administration Microsoft, chacune activable séparément depuis le menu (popup) :
 
 | Fonction | Rôle en une ligne |
 |---|---|
@@ -15,7 +15,8 @@ Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111)
 | **Setting Inspector** | Carte au survol d'un paramètre du catalogue, section détails : ID, OMA-URI / clé, licence, version OS min., GPO, liens Learn. |
 | **Settings Explainer** | Même carte, section explication (texte rédigé, page CSP Learn lue en direct, valeurs, valeur par défaut). Activable seule. |
 | **OpenIntuneBaseline** | Même carte, section OIB : valeur configurée par la baseline communautaire OpenIntuneBaseline (GPL-3.0) et stratégie concernée. Activable seule. |
-| **Assignment Lens** | Panneau sur une stratégie ou une application : groupes inclus / exclus, nombre de membres, filtres, chevauchements. |
+| **Assignment Lens** | Panneau sur une stratégie ou une application : groupes inclus / exclus, nombre de membres (groupe vide en rouge), filtres, chevauchements. |
+| **Assignment Search** | Bouton flottant : stratégies et applications affectées à un groupe, un utilisateur ou un appareil (groupes imbriqués, exclusions, filtres), ou sans affectation, avec export JSON. Lecture seule. |
 | **Change Snapshot** | Journal local des modifications de stratégies faites dans le portail : diff avant / après, auteur, n° de ticket, export JSON / CSV. |
 | **Set Tenant Language** | Boutons « 🌐 » empilés à gauche des pastilles du menu : rechargent l'onglet de la console dans la Langue 1 ou la Langue 2 prédéfinies. |
 | **Raccourci PIM** | Boutons violets « 🔑 PIM éligible » / « 🔑 PIM actif » du menu : ouvrent PIM > Mes rôles sur le tenant détecté dans l'onglet actif. |
@@ -25,7 +26,7 @@ Tenant Compass est une extension Chrome / Edge (**Manifest V3**, Chrome ≥ 111)
 
 Principes :
 
-- **Aucune inscription d'application dans le tenant.** As-Built, Assignment Lens, Policy Import, Bulk Assignment et Scope Tags Clean up réutilisent le jeton Graph que le portail utilise déjà (observé en mémoire). Tenant Guard, Setting Inspector, Settings Explainer, Change Snapshot, Set Tenant Language et le Raccourci PIM n'appellent jamais Graph (Change Snapshot observe seulement les appels du portail). Settings Explainer lit des pages publiques de `learn.microsoft.com` depuis le service worker (section 4.7).
+- **Aucune inscription d'application dans le tenant.** As-Built, Assignment Lens, Assignment Search, Policy Import, Bulk Assignment et Scope Tags Clean up réutilisent le jeton Graph que le portail utilise déjà (observé en mémoire). Tenant Guard, Setting Inspector, Settings Explainer, Change Snapshot, Set Tenant Language et le Raccourci PIM n'appellent jamais Graph (Change Snapshot observe seulement les appels du portail). Settings Explainer lit des pages publiques de `learn.microsoft.com` depuis le service worker (section 4.7).
 - **Pas d'étape de build.** Le dossier se charge tel quel comme extension décompressée. Pas de bundler, pas de dépendance npm.
 - **JavaScript vanilla.** Chaque fonction sépare un `lib.js` pur (testable sous Node via `module.exports`) et un script de page qui touche au DOM et au réseau (Set Tenant Language et le Raccourci PIM n'ont pas de script de page : leur `lib.js` est chargé par le popup, et par le service worker pour PIM).
 - **Bilingue FR / EN** : le menu et les textes affichés dans le portail suivent la langue choisie dans le menu (section 5.3).
@@ -50,7 +51,7 @@ tenant-compass/
 ├── shared/
 │   ├── drag.js                   Déplacement à la souris + mémorisation de position, un panneau à la fois, épingle (MAIN world)
 │   ├── test.js                   Tests Node de drag.js (épingle, premier plan)
-│   ├── graph-bridge.js           Policy Import, Bulk Assignment, Scope Tags Clean up : jeton observé, relais entre frames, opérations fermées (MAIN world)
+│   ├── graph-bridge.js           Policy Import, Bulk Assignment, Scope Tags Clean up, Assignment Search : jeton observé, relais entre frames, opérations fermées (MAIN world)
 │   ├── assign-lib.js             Fonctions pures : cibles, corps de /assign, fusion avec l'existant, scope tags, recherche de groupes
 │   ├── assign-form.js            Formulaire commun : cible, filtre, scope tags (MAIN world)
 │   ├── assign-i18n.js            Dictionnaire FR / EN du formulaire et du pont (21 clés)
@@ -96,6 +97,11 @@ tenant-compass/
 │   ├── lib.js                    Fonctions pures : familles Graph, parsing d'URL, jeton dans un message, chevauchements
 │   ├── i18n.js                   Dictionnaire FR / EN (39 clés)
 │   ├── page.js                   Observation Graph, requêtes GET, panneau (MAIN world)
+│   └── test.js                   Tests Node
+├── assignment-search/
+│   ├── lib.js                    Fonctions pures : tables fermées d'URL (listes, recherche, appartenances), correspondance, export JSON
+│   ├── i18n.js                   Dictionnaire FR / EN (62 clés)
+│   ├── page.js                   Pont Graph en lecture, recherche, liste déroulante, résultats, export (MAIN world)
 │   └── test.js                   Tests Node
 ├── change-snapshot/
 │   ├── lib.js                    Fonctions pures : parsing d'URL, $batch, nettoyage / masquage, avant / après, diff, claims JWT, CSV
@@ -151,6 +157,7 @@ flowchart TD
     SI1["setting-inspector page-hook.js MAIN<br/>+ content.js ISOLATED"]
     SE1["settings-explainer page-hook.js MAIN<br/>+ content.js ISOLATED<br/>(remplace Setting Inspector si actif)"]
     AL1["assignment-lens/page.js + drag.js<br/>MAIN, document_start<br/>panneau (intune uniquement)"]
+    AS1["assignment-search/page.js + drag.js<br/>MAIN, document_start<br/>recherche, résultats, export"]
     CS1["change-snapshot page.js MAIN<br/>+ content.js ISOLATED<br/>cache avant, diff, dialogue"]
     PI1["policy-import/page.js + drag.js<br/>MAIN, document_start, désactivé par défaut<br/>panneau, aperçu, confirmation"]
     BA1["bulk-assign/page.js + drag.js<br/>MAIN, document_start, désactivé par défaut<br/>liste, cible, confirmation"]
@@ -163,6 +170,7 @@ flowchart TD
     SI2["setting-inspector<br/>hook + carte"]
     SE2["settings-explainer<br/>hook + carte"]
     AL2["assignment-lens/page.js<br/>jeton observé + requêtes GET"]
+    AS2["assignment-search/page.js + graph-bridge.js<br/>jeton observé + relais d'opérations (lecture)"]
     CS2["change-snapshot<br/>observation + validation"]
     PI2["policy-import/page.js + graph-bridge.js<br/>jeton observé + relais d'opérations"]
     BA2["bulk-assign/page.js + graph-bridge.js<br/>jeton observé + relais d'opérations"]
@@ -176,6 +184,7 @@ flowchart TD
   PI1 <-->|"postMessage ping / call / res (nom d'opération, jamais d'URL)"| PI2
   BA1 <-->|"postMessage ping / call / res (nom d'opération, jamais d'URL)"| BA2
   SC1 <-->|"postMessage ping / call / res (nom d'opération, jamais d'URL)"| SC2
+  AS1 <-->|"postMessage ping / call / res (nom d'opération, jamais d'URL)"| AS2
   AL2 -->|"postMessage result (sans jeton)"| AL1
   AL1 -->|"postMessage refresh"| AL2
   TG1 -->|"runtime message state"| BG
@@ -189,6 +198,8 @@ flowchart TD
   AB2 -->|"GET avec jeton observé"| G
   AL2 -->|"GET avec jeton observé"| G
   AL1 -.->|"GET si jeton capté via MessagePort"| G
+  AS2 -->|"GET des listes avec affectations, recherche, transitiveMemberOf"| G
+  AS1 -.->|"idem si jeton capté via MessagePort"| G
   PI2 -->|"GET des noms, POST de création, POST /assign"| G
   PI1 -.->|"idem si jeton capté via MessagePort"| G
   BA2 -->|"GET des listes et de l'existant, POST /assign, PATCH scope tags"| G
@@ -236,7 +247,7 @@ Plus `tenant-guard/background.js`, chargé par `importScripts` dans le service w
 
 **Stockage.** `chrome.storage.sync` : `rules` (dont l'ID de tenant appris), `customColors`. `chrome.storage.session` : `t<tabId>`. Lecture seule des noms de clés `localStorage` / `sessionStorage` du portail et de l'entrée de session du shell Microsoft 365 (`tenantId` seulement).
 
-**Interface de l'extension.** Les clics dont le chemin passe par un hôte de Tenant Compass (`#tenant-guard`, `#as-built-host`, `#assignment-lens`, `#setting-inspector`, `#settings-explainer`, `#change-snapshot`) ne sont jamais gardés : ces boutons n'écrivent que des données locales (par exemple « Enregistrer » du journal Change Snapshot).
+**Interface de l'extension.** Les clics dont le chemin passe par un hôte de Tenant Compass (`#tenant-guard`, `#as-built-host`, `#assignment-lens`, `#assignment-search`, `#setting-inspector`, `#settings-explainer`, `#change-snapshot`) ne sont jamais gardés : ces boutons n'écrivent que des données locales (par exemple « Enregistrer » du journal Change Snapshot).
 
 **UI.** Pastille fixe en haut au centre, cadre de 4 px (6 px en PROD), modale de confirmation (focus par défaut sur « Annuler »). Dans le popup : carte « onglet actuel » (signaux détectés, bouton « Référencer » qui crée **une** règle avec tous les signaux non référencés : nom et ID) et tableau des tenants (correspondance, étiquette, couleur, PROD), export JSON, import (ouvre la page d'options en onglet car le sélecteur de fichier ferme le popup ; idem pour le sélecteur de couleur libre). Le choix de couleur (`<details class="pick">`) est une grille de 5 colonnes de 164 px de large : ligne 1, les 5 couleurs par défaut (`PRESETS`) ; ligne 2, les 5 couleurs enregistrées (`customColors`, la première forcée en colonne 1) ; dessous, curseurs teinte / luminosité, code hex, « Autre… » et « Enregistrer ».
 
@@ -389,7 +400,7 @@ sequenceDiagram
 
 **Stockage.** Aucun `chrome.storage`. `localStorage` du portail : `tenant-compass:pos:assignment-lens-fab`, `tenant-compass:pos:assignment-lens-panel`.
 
-**UI.** Shadow DOM fermé (hôte `#assignment-lens`). Réduit par défaut en bouton « Assignment Lens » ; clic → panneau de 380 px. « ↻ » actualise, « – » ou clic sur le titre réduit. Les textes Graph passent uniquement par `append(string)` / `textContent`.
+**UI.** Shadow DOM fermé (hôte `#assignment-lens`). Réduit par défaut en bouton « Assignment Lens » ; clic → panneau de 380 px. « ↻ » actualise, « – » ou clic sur le titre réduit. Un groupe à 0 membre s'affiche en rouge (« groupe vide, sans effet ») au lieu du nombre. Les textes Graph passent uniquement par `append(string)` / `textContent`.
 
 **`lib.js`** (`globalThis.AssignmentLensLib`). `FAMILIES`, `parsePolicyRef`, `parseHashRef`, `graphTokenIn`, `targetKey`, `summarizeAssignments`, `findOverlaps`.
 
@@ -629,6 +640,39 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 **Tests.** `scope-cleanup/test.js` : règle sur Default (jamais de liste vide), tables fermées, droits par type, relecture sans `$select`, lecture un par un, ligne (Default seul, liste périmée, lecture refusée, `5xx`), série (`429`, `401`), `exportRows`, clés i18n, `scopeCleanup: false` dans les deux `DEFAULTS`, contrôles statiques.
 
+### 4.11 Assignment Search
+
+**Rôle.** Question inverse d'Assignment Lens : quelles stratégies et applications ciblent ce groupe, cet utilisateur ou cet appareil, et lesquelles n'ont aucune affectation. **Lecture seule**, active par défaut.
+
+**Scripts.**
+
+| ID | Fichiers | Monde | Quand | Frames | Matches |
+|---|---|---|---|---|---|
+| `assignment-search` | `shared/drag.js`, `shared/graph-bridge.js`, `as-built/i18n.js`, `as-built/lib.js`, `assignment-search/lib.js`, `assignment-search/page.js` | MAIN | `document_start` | Toutes | `intune.microsoft.com`, `endpoint.microsoft.com`, `*.portal.azure.net` |
+
+**Jeton.** Pont commun (`shared/graph-bridge.js`, canal `assignmentSearch`), un seul type `read` : tout jeton Graph qui lit les objets Intune (règle d'As-Built, `tokenKinds` → `intune`). Les messages entre frames portent un nom d'opération et des ID, jamais d'URL. Opérations : `list` (une source de la table), `filters`, `search` (type + texte), `memberOf` (type + `{ id, entraId }`). Toutes passent par `bridge.read` / `bridge.readAll` (`GET`, `credentials: 'omit'`, `nextLink` limité à Graph).
+
+**Flux.**
+
+1. Ouverture : `discover()` toutes les 2 s jusqu'à trouver un jeton, puis remplissage de la liste déroulante.
+2. Liste déroulante (`searchUrl`) : texte vide → les 100 premiers (`$orderby=displayName` pour groupes et utilisateurs) ; ID collé → lecture directe ; sinon `startswith(displayName…)` (utilisateurs : aussi `userPrincipalName`) ou `contains(deviceName…)` pour `managedDevices` (seuls `eq` et `contains` sont pris en charge, Learn). Pas de `$orderby` avec un filtre (requêtes avancées) : `found()` trie. Un seul résultat pour un texte tapé : analysé tout de suite.
+3. Première analyse : lecture des 19 sources (`SOURCES`, 4 à la fois, chacune jusqu'à la dernière page) avec `$expand=assignments`, puis des filtres d'affectation. Cache en mémoire, relu par ↻ ou si le tenant change.
+4. Appartenances (`memberOfUrl`) : `{groups|users}/{id}/transitiveMemberOf/microsoft.graph.group`, ou `devices(deviceId='{azureADDeviceId}')/transitiveMemberOf/…` pour un appareil géré. Sans `azureADDeviceId` : pas de lecture, avertissement.
+5. `resolve()` : groupe → affectations directes et des groupes parents (ni Tous les utilisateurs ni Tous les appareils) ; utilisateur → ses groupes et Tous les utilisateurs ; appareil → ses groupes et Tous les appareils. Une exclusion correspondante classe la ligne en « exclu ». Filtres et types de déploiement affichés, non évalués. Objets dont les affectations ne sont pas complètes (`assignments@odata.nextLink`) : comptés, pas listés.
+6. « Sans affectation » : `unassigned()` sur le même cache (objets lus en entier, liste d'affectations vide).
+
+**Sources.** `deviceManagement/` : `configurationPolicies`, `deviceConfigurations`, `deviceCompliancePolicies`, `groupPolicyConfigurations`, `deviceManagementScripts`, `deviceShellScripts`, `deviceCustomAttributeShellScripts`, `deviceHealthScripts`, `windowsAutopilotDeploymentProfiles`, `deviceEnrollmentConfigurations`, `windowsFeatureUpdateProfiles`, `windowsQualityUpdateProfiles`, `windowsDriverUpdateProfiles` ; `deviceAppManagement/` : `mobileApps` (toutes, `isAssigned` non utilisé car parfois périmé), `mobileAppConfigurations`, `targetedManagedAppConfigurations`, `iosManagedAppProtections`, `androidManagedAppProtections`, `windowsManagedAppProtections`. Une source refusée est nommée dans la ligne d'état et dans `coverage.failedTypes` de l'export.
+
+**Réessais.** Seul `429` est réessayé (2 fois, délai `Retry-After`, sinon 10 s).
+
+**Export JSON.** `exportDoc` : `exportedAt`, `tenantId`, `type`, `subject` (`id`, `name`, `detail`, `entraDeviceId`), `memberships` (`id`, `name`), `coverage` (`failedTypes`, `unreadObjects`, `warning`), `results` (`name`, `id`, `kind`, `type`, `platform`, `state`, `via` : `how`, `target`, `mode`, `intent`, `filter`). Aucun objet Graph brut. Fichier `assignment-search-<type>-<nom>-AAAA-MM-JJ.json` par lien `blob:`.
+
+**Stockage.** Aucun. Positions : `assignment-search-fab`, `assignment-search-panel`.
+
+**UI.** Hôte `#assignment-search`, Shadow DOM fermé, panneau de 520 px. Type d'objet, recherche, liste déroulante, résultats en deux parties (Inclus, Exclus) ou une (Sans affectation), ligne d'état, bouton d'export. Textes Graph par `textContent` uniquement.
+
+**Tests.** `assignment-search/test.js` : tables fermées (types inconnus refusés, `isAssigned` absent), URL de recherche (guillemets doublés, encodage, ID collé, pas de `$orderby` sur les appareils), `found()`, `memberOfUrl` (GUID seulement, appareil sans objet Entra), `resolve()` (direct, parent, exclusion prioritaire, Tous les utilisateurs / appareils selon le type, intention, filtre « none » ignoré, objets non lus), `unassigned()`, `exportDoc` (pas d'objet Graph brut), `exportName`.
+
 ---
 
 ## 5. Menu, activation des fonctions et langues
@@ -645,7 +689,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 ### 5.2 Activation
 
-- Clé `chrome.storage.sync` **`features`** : `{ tenantGuard, asBuilt, settingInspector, settingsExplainer, oibRecommendations, assignmentLens, changeSnapshot, portalLanguage, pim, policyImport, bulkAssign, scopeCleanup }`, booléens (`portalLanguage` et `pim` : menu seulement, sans content script). Les trois modules de la carte de paramètre sont indépendants : la carte est enregistrée dès que l'un d'eux est actif (section 4.3).
+- Clé `chrome.storage.sync` **`features`** : `{ tenantGuard, asBuilt, settingInspector, settingsExplainer, oibRecommendations, assignmentLens, assignmentSearch, changeSnapshot, portalLanguage, pim, policyImport, bulkAssign, scopeCleanup }`, booléens (`portalLanguage` et `pim` : menu seulement, sans content script). Les trois modules de la carte de paramètre sont indépendants : la carte est enregistrée dès que l'un d'eux est actif (section 4.3).
 - Défauts : **tout à `true`, sauf `policyImport`, `bulkAssign` et `scopeCleanup`**, qui écrivent dans le tenant et restent un choix explicite. L'objet `DEFAULTS` est dupliqué dans `background.js` et `popup.js` (commentaire « keep in sync »). Les valeurs stockées sont fusionnées sur les défauts, donc une nouvelle fonction prend sa valeur par défaut chez les utilisateurs existants.
 - `popup.js` : chaque case générée écrit `features`, affiche le bouton de rechargement et redessine le menu.
 - `background.js` `apply()` : lit `features` et `lang`, **désenregistre tous** les scripts enregistrés, puis enregistre le marqueur `ui-lang` et ceux des fonctions actives (`SCRIPTS[clé]`, passés par `withI18n`). Une fonction sans entrée `SCRIPTS` (Set Tenant Language) n'enregistre rien. Si Tenant Guard est désactivé, le badge est vidé.
@@ -657,7 +701,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 **Menu.**
 
-- `shared/i18n.js`, chargé en premier par `popup.html` : dictionnaire `I18N` avec deux langues, `fr` (Français) et `en` (English US), mêmes clés (60 : `menu.*`, `f.<clé>`, `f.<clé>.desc`, `tg.*`, `pl.*`).
+- `shared/i18n.js`, chargé en premier par `popup.html` : dictionnaire `I18N` avec deux langues, `fr` (Français) et `en` (English US), mêmes clés (93 : `menu.*`, `f.<clé>`, `f.<clé>.desc`, `tg.*`, `pl.*`).
 - `t(key, vars)` : texte dans la langue courante, repli sur `fr` puis sur la clé ; variables `{nom}`. `applyI18n()` remplit `[data-i18n]` (`textContent`) et `[data-i18n-title]` (`title`) et pose `<html lang>` (`fr-FR` / `en-US`). `setLang(lang)` écrit `chrome.storage.sync` `lang`. `i18nReady` se résout quand la langue stockée est lue ; `popup.js` l'attend avant le premier rendu.
 - Défaut sans valeur stockée : `fr` si `navigator.language` commence par `fr`, sinon `en` (même règle dans `background.js` et `journal.js`).
 
@@ -666,7 +710,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 - `background.js` enregistre le marqueur **`ui-lang`** : `shared/lang/fr.js` ou `shared/lang/en.js` selon `lang`, `document_start`, toutes les frames, tous les `host_permissions`, monde ISOLATED. Il pose `<html data-tenant-compass-lang="fr|en">`, attribut lisible par les deux mondes (les scripts MAIN n'ont pas accès à `chrome.*`).
 - `withI18n` ajoute en tête de chaque script de fonction l'assistant puis `<fonction>/i18n.js`. **Chrome n'injecte un fichier qu'une fois par frame, quel que soit le monde** : un fichier listé par un script MAIN et par un script ISOLATED ne s'exécute que dans le premier injecté. D'où un chemin par monde pour l'assistant (`shared/i18n-page.js` en MAIN, `shared/i18n-page-isolated.js` en ISOLATED, copies identiques vérifiées par `tenant-guard/test.js`), et `i18n: false` sur les hooks MAIN sans texte, pour que `<fonction>/i18n.js` arrive dans le script ISOLATED qui affiche la carte. Aucun fichier n'est listé dans les deux mondes (vérifié par `tenant-guard/test.js`) : `change-snapshot/lib.js` n'est enregistré que pour le hook MAIN, et `content.js` le charge par `import()` (ressource web accessible). Avant cette règle, `lib.js` pouvait partir dans le monde ISOLATED et `page.js` s'arrêtait sans rien observer.
 - `shared/i18n-page.js` n'expose qu'un global, `globalThis.__tenantCompassI18n` (garde contre le double chargement, pour ne pas heurter les globaux du portail) : `lang()` (lit l'attribut à chaque appel, `fr` par défaut), `add({ fr, en })` (fusionne un dictionnaire), `t(key, vars)` (repli sur `fr` puis sur la clé, variables `{nom}`).
-- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 39, Change Snapshot 36, Policy Import 64, Bulk Assignment 43, Scope Tags Clean up 33, formulaire d'affectation 21.
+- Dictionnaires par fonction, clés préfixées par le nom de la fonction : Tenant Guard 8, As-Built 82, Setting Inspector 18, Assignment Lens 42, Assignment Search 62, Change Snapshot 36, Policy Import 64, Bulk Assignment 43, Scope Tags Clean up 33, formulaire d'affectation 21.
 - Les `lib.js` gardent des défauts français pour les tests Node (As-Built : `T(key, frDefault)`), à garder alignés sur le `fr` de `i18n.js`.
 - `storage.onChanged` sur `lang` relance `apply()` ; la nouvelle langue s'applique aux onglets du portail **après rechargement** (bouton `#reload-btn`). La page Journal, page d'extension, se re-rend immédiatement.
 - Ajouter une langue : un dictionnaire de plus dans `I18N` et dans chaque `<fonction>/i18n.js` (mêmes clés), un `shared/lang/<xx>.js`, la valeur dans `LANGS` (`background.js`), dans `dict` et `lang()` de `shared/i18n-page.js`, dans la liste de `journal.js`, et un bouton `data-lang` dans `popup.html`.
@@ -688,7 +732,7 @@ La liste réutilise `policySummary` et les libellés d'As-Built, et les règles 
 
 Toutes les UI injectées vivent dans un Shadow DOM (`:host { all: initial; color-scheme: light; }` pour As-Built et Setting Inspector).
 
-**`shared/drag.js`** (MAIN world, chargé par As-Built, Assignment Lens, Policy Import, Bulk Assignment et Scope Tags Clean up, garde `window.__tenantCompassDrag` contre le double chargement) :
+**`shared/drag.js`** (MAIN world, chargé par As-Built, Assignment Lens, Assignment Search, Policy Import, Bulk Assignment et Scope Tags Clean up, garde `window.__tenantCompassDrag` contre le double chargement) :
 
 - `window.__tenantCompassExclusive(id, close)` : un panneau à la fois. Renvoie `opened()`, à appeler à l'ouverture : il ferme les autres panneaux **non épinglés** et passe celui-ci au premier plan.
 - `window.__tenantCompassPin(id)` : bouton 📌 de l'en-tête (`aria-pressed`). Un panneau épinglé ignore la fermeture par un autre module. L'épingle vit en mémoire, pour la vie de la page, et survit à la fermeture du panneau par ×.
@@ -703,10 +747,11 @@ Toutes les UI injectées vivent dans un Shadow DOM (`:host { all: initial; color
 |---|---|
 | Bouton As-Built | `left: 20px; bottom: 20px` |
 | Bouton Assignment Lens | `left: 20px; bottom: 72px` |
-| Bouton Policy Import | `left: 20px; bottom: 124px` |
-| Bouton Bulk Assignment | `left: 20px; bottom: 176px` |
-| Bouton Scope Tags Clean up | `left: 20px; bottom: 228px` |
-| Panneaux (les cinq) | `left: 240px; bottom: 20px`, à droite de la colonne de boutons, qui reste cliquable. Largeur et hauteur max : As-Built et Policy Import 500 px / 76vh, Assignment Lens 380 px / 60vh, Bulk Assignment 520 px / 84vh, Scope Tags Clean up 560 px / 84vh |
+| Bouton Assignment Search | `left: 20px; bottom: 124px` |
+| Bouton Policy Import | `left: 20px; bottom: 176px` |
+| Bouton Bulk Assignment | `left: 20px; bottom: 228px` |
+| Bouton Scope Tags Clean up | `left: 20px; bottom: 280px` |
+| Panneaux (les six) | `left: 240px; bottom: 20px`, à droite de la colonne de boutons, qui reste cliquable. Largeur et hauteur max : As-Built et Policy Import 500 px / 76vh, Assignment Lens 380 px / 60vh, Assignment Search et Bulk Assignment 520 px / 84vh, Scope Tags Clean up 560 px / 84vh |
 | Dialogue Change Snapshot | `right: 20px; bottom: 20px`, largeur 520 px, fixe (pas de `drag.js`, non concerné par « Positions par défaut ») |
 
 **Bouton « Positions par défaut »** (popup) : `chrome.scripting.executeScript` dans le frame top de l'onglet actif supprime toutes les clés `tenant-compass:pos:*`, puis recharge l'onglet. Échec (onglet hors portail) → message « Ouvrez d'abord l'onglet du portail Intune. »
@@ -724,6 +769,7 @@ Toutes les UI injectées vivent dans un Shadow DOM (`:host { all: initial; color
 | Setting Inspector | Non | — | Seules les réponses JSON du portail, à la même fenêtre | Aucun |
 | Settings Explainer | Non | — | Comme Setting Inspector | Aucun vers Graph ; GET sans cookie de pages publiques `learn.microsoft.com/…/mdm/<page>` par le service worker (URL construite par lui) |
 | Assignment Lens | Oui, en-tête `Authorization` ou JWT `aud` Graph vu dans un `postMessage` du shell | Variable de closure, par frame | Jamais : le résultat posté au top est déjà résumé | GET uniquement, vers `graph.microsoft.com/` (nextLink vérifié) |
+| Assignment Search | Oui, comme Policy Import (pont commun), gardé s'il lit les objets Intune | Variable de closure du pont, par frame | Jamais : seuls le type `read` et le `tid` passent dans `pong` | GET uniquement, URL issues des tables fermées de `assignment-search/lib.js` (nextLink vérifié) |
 | Change Snapshot | Oui, en-tête `Authorization` des écritures observées (page et workers `blob:`), décodé localement sans vérification de signature | Métadonnées de la requête en cours, le temps de la décoder | Jamais : seuls les claims `upn` et `tid` sortent du monde MAIN (rien pour un GET) | Aucun |
 | Set Tenant Language | Non | — | — | Aucun (seulement `chrome.tabs.update` de l'onglet actif) |
 | Raccourci PIM | Non | — | — | Aucun (`chrome.tabs.create` vers `portal.azure.com`, puis un clic d'onglet dans cette page) |
@@ -740,7 +786,7 @@ Le jeton n'est jamais écrit dans `chrome.storage`, `localStorage`, la console, 
 | As-Built, iframe reçoit `ping` / `get` | `e.source === window.top` et `e.origin` ∈ origines UI ; réponse ciblée sur `e.origin` |
 | As-Built, top reçoit `pong` / `res` | `e.origin` correspond à `WORKER_ORIGIN` ; `res` accepté seulement depuis le worker choisi et pour un `id` en attente |
 | As-Built, `ping` émis | cible `'*'`, mais le message ne contient aucune donnée |
-| Policy Import, Bulk Assignment et Scope Tags Clean up (pont), iframe reçoit `ping` / `call` | `e.source === window.top` et `e.origin` ∈ origines Intune ; opération validée par `Object.hasOwn`, le message ne porte jamais d'URL ; écriture refusée si le `tid` du jeton diffère ; réponse ciblée sur `e.origin` |
+| Policy Import, Bulk Assignment, Scope Tags Clean up et Assignment Search (pont), iframe reçoit `ping` / `call` | `e.source === window.top` et `e.origin` ∈ origines Intune ; opération validée par `Object.hasOwn`, le message ne porte jamais d'URL ; écriture refusée si le `tid` du jeton diffère ; réponse ciblée sur `e.origin` |
 | Pont, top reçoit `pong` / `res` | `e.origin` correspond à `FRAME_ORIGIN` ; `res` accepté seulement depuis la frame interrogée et pour un `id` en attente |
 | Pont, `ping` émis | cible `'*'`, mais le message ne contient aucune donnée |
 | Setting Inspector, hook → content | émis vers `location.origin`, reçu si `e.source === window` |
@@ -773,7 +819,7 @@ Pas de permission `tabs` ni `activeTab` : `tabs.query`, `tabs.reload`, `tabs.upd
 
 | Zone | Clé | Propriétaire | Forme |
 |---|---|---|---|
-| `chrome.storage.sync` | `features` | `popup.js` (écrit), `background.js` (lit) | `{ tenantGuard: bool, asBuilt: bool, settingInspector: bool, settingsExplainer: bool, oibRecommendations: bool, assignmentLens: bool, changeSnapshot: bool, portalLanguage: bool, pim: bool, policyImport: bool, bulkAssign: bool, scopeCleanup: bool }` |
+| `chrome.storage.sync` | `features` | `popup.js` (écrit), `background.js` (lit) | `{ tenantGuard: bool, asBuilt: bool, settingInspector: bool, settingsExplainer: bool, oibRecommendations: bool, assignmentLens: bool, assignmentSearch: bool, changeSnapshot: bool, portalLanguage: bool, pim: bool, policyImport: bool, bulkAssign: bool, scopeCleanup: bool }` |
 | `chrome.storage.sync` | `lang` | `shared/i18n.js` (`setLang` écrit, `i18nReady` lit) ; lu aussi par `background.js` (marqueur `ui-lang`) et `journal.js` | `'fr'` ou `'en'` ; absent → langue du navigateur |
 | `chrome.storage.sync` | `portalLangs` | Set Tenant Language (`popup.js`) | `[{ lang, format }, { lang, format }]`, codes de `LANGUAGES` / `FORMATS` ; défaut français puis anglais (l'ancienne clé `portalLang` devient la Langue 2) |
 | `chrome.storage.sync` | `rules` | Tenant Guard (`options.js` écrit, `content.js` lit) | `[{ match: string, label: string, color: '#rrggbb', prod: bool }]` |
@@ -787,6 +833,7 @@ Pas de permission `tabs` ni `activeTab` : `tabs.query`, `tabs.reload`, `tabs.upd
 | `localStorage` (portail) | `tenant-compass:pos:as-built-panel` | idem | `{ x, y }` |
 | `localStorage` (portail) | `tenant-compass:pos:assignment-lens-fab` | `shared/drag.js` pour Assignment Lens | `{ x, y }` |
 | `localStorage` (portail) | `tenant-compass:pos:assignment-lens-panel` | idem | `{ x, y }` |
+| `localStorage` (portail) | `tenant-compass:pos:assignment-search-fab`, `tenant-compass:pos:assignment-search-panel` | `shared/drag.js` pour Assignment Search | `{ x, y }` |
 | `localStorage` (portail) | `tenant-compass:pos:policy-import-fab`, `tenant-compass:pos:policy-import-panel` | `shared/drag.js` pour Policy Import | `{ x, y }` |
 | `localStorage` (portail) | `tenant-compass:pos:bulk-assign-fab`, `tenant-compass:pos:bulk-assign-panel` | `shared/drag.js` pour Bulk Assignment | `{ x, y }` |
 | `localStorage` (portail) | `tenant-compass:pos:scope-cleanup-fab`, `tenant-compass:pos:scope-cleanup-panel` | `shared/drag.js` pour Scope Tags Clean up | `{ x, y }` |
@@ -842,6 +889,9 @@ Tirées des commentaires `ponytail:` et du `README.md`.
 | `bulk-assign` | Pas de vérification préalable de la plateforme d'un filtre : Graph refuse la ligne et son message s'affiche | Filtrer la liste par plateforme |
 | `scope-cleanup` | Change Snapshot ne suit pas `mobileApps` : le retrait sur une application n'est pas journalisé. L'ajouter ferait aussi journaliser les envois de contenu d'applications | L'ajouter limité à `mobileApps/{id}` si le besoin apparaît |
 | `scope-cleanup` | Seul Default est retiré. Les types hors table (protection d'applications, configurations d'applications, filtres…) ne sont pas listés | Étendre `KINDS` si un type est signalé |
+| `assignment-search` | Filtres d'affectation affichés, non évalués ; pas de simulation d'ajout ou de retrait de groupe ; affectations de l'utilisateur principal d'un appareil non listées ; inclusion et exclusion de types différents (groupe d'utilisateurs / d'appareils) traitées comme des groupes ordinaires : l'exclusion l'emporte | Évaluation locale des filtres (propriétés de `managedDevices`), simulation à partir de `resolve()` |
+| `assignment-search/lib.js` | Recherche par début de nom pour groupes et utilisateurs (`startswith`) ; 100 résultats au plus ; anciens modèles de sécurité (`intents`) et Windows 365 non lus | `$search` avec `ConsistencyLevel: eventual` pour chercher un mot ; ajouter les sources si le besoin apparaît |
+| `assignment-search/page.js` | 4 listes à la fois, chacune lue jusqu'à la dernière page, gardées en mémoire tant que la page vit | Lecture par type à la demande si les gros tenants le demandent |
 | `shared/assign-lib.js` | Attributs personnalisés traités comme sans filtre par prudence : Learn cite les scripts shell sans les nommer | Ajuster `filter` si Microsoft les documente |
 | `policy-import/page.js` | Pas de bouton d'arrêt pendant une série ; recharger la page l'interrompt, les doublons sont signalés au prochain import | Ajouter un arrêt si les séries longues gênent |
 | `policy-import` + `change-snapshot` | Journal sans ticket : le numéro se saisit après coup, entrée par entrée | Un ticket unique dans le dialogue d'import |
@@ -851,7 +901,7 @@ Autres constats à la lecture du code :
 - `change-snapshot/README.md` décrit encore l'extension autonome (installation du dossier `change-snapshot/`, `manifest.json` propre, « aucune permission d'hôte », journal ouvert par clic sur l'icône) : dans Tenant Compass, le journal s'ouvre depuis le menu et l'extension a des `host_permissions`. Les sections fonctionnement, sécurité et limites restent valables.
 - Assignment Lens ne fonctionne pas sur `endpoint.microsoft.com` (`TOP` fixé à `intune.microsoft.com`, absent des `matches`).
 - `data/settings.json` ne contient qu'une graine de 12 paramètres ; la couverture réelle dépend des définitions capturées dans `explainerLive`.
-- As-Built, Assignment Lens, Policy Import, Bulk Assignment, Scope Tags Clean up, Setting Inspector (ou Settings Explainer) et Change Snapshot enveloppent chacun `window.fetch` / `XMLHttpRequest` dans la même frame (Change Snapshot enveloppe aussi `Worker`). L'ordre d'enveloppement entre scripts enregistrés séparément n'est pas garanti par le code (**à vérifier**) ; chaque wrapper rappelle l'original et ne modifie pas la requête, donc l'ordre ne devrait pas changer le comportement.
+- As-Built, Assignment Lens, Assignment Search, Policy Import, Bulk Assignment, Scope Tags Clean up, Setting Inspector (ou Settings Explainer) et Change Snapshot enveloppent chacun `window.fetch` / `XMLHttpRequest` dans la même frame (Change Snapshot enveloppe aussi `Worker`). L'ordre d'enveloppement entre scripts enregistrés séparément n'est pas garanti par le code (**à vérifier**) ; chaque wrapper rappelle l'original et ne modifie pas la requête, donc l'ordre ne devrait pas changer le comportement.
 
 ---
 

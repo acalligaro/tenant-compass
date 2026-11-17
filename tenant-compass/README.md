@@ -2,7 +2,7 @@
 
 *Boîte à outils pour le portail Microsoft Intune.* · [English version](README.en.md)
 
-Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Change Snapshot, Set Tenant Language, Raccourci PIM, Policy Import, Bulk Assignment et Scope Tags Clean up réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
+Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, Raccourci PIM, Policy Import, Bulk Assignment et Scope Tags Clean up réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
 
 Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -21,6 +21,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 - [Tenant Guard](#tenant-guard)
 - [As-Built](#as-built-panneau-dans-le-portail)
 - [Assignment Lens](#assignment-lens)
+- [Assignment Search](#assignment-search)
 - [Setting Inspector](#setting-inspector)
 - [Settings Explainer](#settings-explainer)
 - [OpenIntuneBaseline](#openintunebaseline)
@@ -45,10 +46,11 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Settings Explainer | Même carte, section explication : texte rédigé, page Learn lue en direct, valeurs, valeur par défaut. Activable seule | Même carte |
 | OpenIntuneBaseline | Même carte, section OIB : valeur configurée par la baseline communautaire OpenIntuneBaseline et stratégie concernée. Activable seule | Même carte |
 | Assignment Lens | Groupes inclus / exclus, membres, filtres, chevauchements de la stratégie affichée | Bouton au-dessus d'As-Built |
+| Assignment Search | Stratégies et applications affectées à un groupe, un utilisateur ou un appareil (groupes imbriqués, exclusions, filtres), ou sans affectation ; export JSON | Bouton au-dessus d'Assignment Lens (Intune) |
 | Change Snapshot | Journal local des modifications : différence avant / après, auteur, n° de ticket, export JSON / CSV | Fenêtre en bas à droite après un enregistrement ; journal depuis le menu |
 | Set Tenant Language | Bascule la console entre deux langues prédéfinies, en 1 clic | Boutons 🌐 du menu ; Intune, Azure, Entra, Defender, Purview |
 | Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives) sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible et 🔑 PIM actif du menu |
-| Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec groupe et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, au-dessus d'Assignment Lens (Intune) |
+| Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec groupe et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, au-dessus d'Assignment Search (Intune) |
 | Bulk Assignment | Ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. **Écrit dans le tenant : désactivée par défaut** | Bouton Bulk Assign, au-dessus d'Import (Intune) |
 | Scope Tags Clean up | Retire le scope tag Default des stratégies et applications qui ont un autre scope tag. **Écrit dans le tenant : désactivée par défaut** | Bouton Scope Tags, au-dessus de Bulk Assign (Intune) |
 
@@ -65,7 +67,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 
 | Fonction | Échange réseau | Contenu |
 |---|---|---|
-| As-Built, Assignment Lens | Lectures (`GET`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies, applications et groupes affichés, comme le fait le portail |
+| As-Built, Assignment Lens, Assignment Search | Lectures (`GET`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies, applications, groupes, utilisateurs et appareils affichés ou recherchés, comme le fait le portail |
 | Policy Import, si vous l'activez | Lecture des noms existants (`GET`) et création (`POST`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies des fichiers que vous choisissez et confirmez, et si vous le demandez leur groupe et leurs scope tags |
 | Bulk Assignment, si vous l'activez | Lectures (`GET`) des stratégies, affectations, groupes, filtres et scope tags, puis `POST …/assign` et `PATCH` (scope tags) sur `graph.microsoft.com`, avec la session du portail | Les stratégies que vous cochez, avec leurs affectations existantes |
 | Scope Tags Clean up, si vous l'activez | Lectures (`GET`) des stratégies, applications et scope tags, puis `PATCH` sur `graph.microsoft.com`, avec la session du portail | Les scope tags des objets que vous cochez |
@@ -158,9 +160,31 @@ Bouton **As-Built** en bas à gauche. Le panneau liste les stratégies et applic
 
 ## Assignment Lens
 
-Bouton **Assignment Lens** en bas à gauche, juste au-dessus d'As-Built. Sur une stratégie ou une application ouverte, la carte montre les groupes inclus et exclus, le nombre de membres, les filtres, les cibles virtuelles (Tous les utilisateurs, Tous les appareils) et les chevauchements avec d'autres stratégies de la même famille. ↻ actualise ; × ou un clic sur le titre ferme la carte. La carte se déplace en glissant son en-tête.
+Bouton **Assignment Lens** en bas à gauche, juste au-dessus d'As-Built. Sur une stratégie ou une application ouverte, la carte montre les groupes inclus et exclus, le nombre de membres, les filtres, les cibles virtuelles (Tous les utilisateurs, Tous les appareils) et les chevauchements avec d'autres stratégies de la même famille. ↻ actualise ; × ou un clic sur le titre ferme la carte. La carte se déplace en glissant son en-tête. Un groupe vide (0 membre) s'affiche en rouge : son affectation ou son exclusion n'a aucun effet.
 
 ![Assignment Lens sur une stratégie LAPS : inclus, exclus, chevauchements](docs/img/readme/fr/05-assignment-lens.jpg)
+
+## Assignment Search
+
+Bouton **Assignment Search** en bas à gauche, au-dessus d'Assignment Lens. Il répond à la question inverse : qu'est-ce qui est affecté à cet objet ?
+
+1. Choisir le type d'objet : **Groupe**, **Utilisateur**, **Appareil**, ou **Stratégies et applications sans affectation**.
+2. Taper le début du nom du groupe, le début du nom ou de l'UPN de l'utilisateur, une partie du nom de l'appareil, ou coller un ID. La liste déroulante montre d'abord les 100 premiers objets du tenant, puis ceux qui correspondent au texte tapé.
+3. Choisir l'objet dans la liste. Le panneau affiche les stratégies et applications qui le ciblent, en deux parties : **Inclus** et **Exclus**.
+4. **Exporter (JSON)** télécharge la liste affichée.
+
+- **Ce qui compte** :
+  - groupe : ses affectations directes et celles de ses groupes parents (quand il est membre d'un autre groupe). Ni « Tous les utilisateurs », ni « Tous les appareils » ;
+  - utilisateur : ses groupes, imbrications comprises, et « Tous les utilisateurs » ;
+  - appareil : les groupes de son objet Entra ID, imbrications comprises, et « Tous les appareils ». Les affectations de son utilisateur principal ne sont pas listées.
+- **Exclusion** : une exclusion qui touche l'objet l'emporte, la stratégie passe dans **Exclus**. Chaque ligne nomme le groupe en cause, le type de déploiement d'une application (Requise, Disponible…) et le filtre d'affectation éventuel. Le filtre n'est pas évalué : l'objet peut être ciblé puis écarté par le filtre.
+- **Types lus** : catalogue de paramètres (sécurité du point de terminaison comprise), profils de configuration, conformité, modèles d'administration, applications, configuration et protection d'applications, scripts PowerShell et shell, attributs personnalisés macOS, remédiations, profils Autopilot, inscription (ESP, restrictions), mises à jour Windows (fonctionnalités, qualité, pilotes). Un type que Graph refuse est nommé dans la ligne d'état.
+- **Sans affectation** : les objets lus en entier qui n'ont aucune affectation, applications comprises.
+- **Lecture seule** : uniquement des `GET` sur Graph, avec la session du portail. Les listes sont lues une fois, à la première recherche ; ↻ les relit.
+- **Droits** : en plus de la lecture Intune, le jeton du portail doit pouvoir lire les groupes de l'objet (`transitiveMemberOf` : `GroupMember.Read.All`, `User.Read.All`, `Device.Read.All` ou `Directory.Read.All` selon le type). Sinon, le panneau le signale et ne liste que les affectations directes, « Tous les utilisateurs » ou « Tous les appareils ».
+- **Export JSON** : l'objet recherché, ses groupes, puis chaque stratégie avec son type, son OS, son état (inclus ou exclu) et les affectations qui le touchent (groupe, mode, type de déploiement, filtre). Les types non lus figurent dans `coverage`.
+
+- Code : `assignment-search/lib.js` (testé : `node assignment-search/test.js`), `assignment-search/page.js`, `shared/graph-bridge.js`.
 
 ## Setting Inspector
 
@@ -298,7 +322,7 @@ Si Tenant Guard a détecté le tenant de l'onglet actif (ID de tenant ou domaine
 
 Elle crée des stratégies Intune à partir des exports JSON d'As-Built, sans PowerShell, sans application à inscrire et sans Graph Explorer. Les appels passent bien par Microsoft Graph, avec la session du portail.
 
-1. Cliquer sur **Import**, au-dessus du bouton Assignment Lens, puis choisir un ou plusieurs fichiers `.json`.
+1. Cliquer sur **Import**, au-dessus du bouton Assignment Search, puis choisir un ou plusieurs fichiers `.json`.
 2. Vérifier l'aperçu : chaque ligne indique le type, les avertissements et ce qui la bloque. Rien n'est écrit à cette étape.
 3. Cliquer sur **Importer (n)**, vérifier l'annuaire et le tenant affichés, puis cliquer sur **OK**.
 
@@ -378,20 +402,21 @@ Comme As-Built, elle affiche une liste. Celle-ci montre chaque stratégie et app
 
 ## Déplacement
 
-As-Built, Assignment Lens, Policy Import, Bulk Assignment et Scope Tags Clean up ne s'ouvrent pas en même temps : ouvrir l'un referme les autres, sauf ceux épinglés.
+As-Built, Assignment Lens, Assignment Search, Policy Import, Bulk Assignment et Scope Tags Clean up ne s'ouvrent pas en même temps : ouvrir l'un referme les autres, sauf ceux épinglés.
 
 **Épingler** : le bouton 📌 de l'en-tête garde le panneau ouvert quand un autre module s'ouvre. Cliquer à nouveau dessus le désépingle, et **×** le ferme toujours. L'épingle dure jusqu'au rechargement de la page. Le panneau ouvert ou cliqué en dernier passe au-dessus des autres.
 
-Les boutons et panneaux de ces cinq modules se déplacent à la souris (bouton : glisser ; panneau : glisser l'en-tête). Position mémorisée par élément dans le `localStorage` du portail (clés `tenant-compass:pos:*`), code commun dans `shared/drag.js`. Bouton **Positions par défaut** dans le menu : efface ces clés dans l'onglet actif et le recharge.
+Les boutons et panneaux de ces six modules se déplacent à la souris (bouton : glisser ; panneau : glisser l'en-tête). Position mémorisée par élément dans le `localStorage` du portail (clés `tenant-compass:pos:*`), code commun dans `shared/drag.js`. Bouton **Positions par défaut** dans le menu : efface ces clés dans l'onglet actif et le recharge.
 
 ## Fonctionnement
 
-`background.js` enregistre dynamiquement (`chrome.scripting.registerContentScripts`) les scripts des fonctions cochées, d'après `chrome.storage.sync` clé `features` (toutes actives par défaut, sauf Policy Import, Bulk Assignment et Scope Tags Clean up). Chaque fonction vit dans son dossier (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `change-snapshot/`, `portal-language/`), avec un `lib.js` testable sous Node et un `test.js`. Le style commun (dégradé #0078d4 → #5b5fc7) et le déplacement (`shared/drag.js`) sont partagés. Détails : [ARCHITECTURE.md](ARCHITECTURE.md).
+`background.js` enregistre dynamiquement (`chrome.scripting.registerContentScripts`) les scripts des fonctions cochées, d'après `chrome.storage.sync` clé `features` (toutes actives par défaut, sauf Policy Import, Bulk Assignment et Scope Tags Clean up). Chaque fonction vit dans son dossier (`tenant-guard/`, `as-built/`, `setting-inspector/`, `settings-explainer/`, `assignment-lens/`, `assignment-search/`, `change-snapshot/`, `portal-language/`…), avec un `lib.js` testable sous Node et un `test.js`. Le style commun (dégradé #0078d4 → #5b5fc7) et le déplacement (`shared/drag.js`) sont partagés. Détails : [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Limites
 
 - Les tenants référencés dans l'extension Tenant Guard séparée ne sont pas repris : le stockage est propre à chaque extension, il faut les ressaisir.
 - Assignment Lens ne fonctionne que sur `intune.microsoft.com` (pas `endpoint.microsoft.com`).
+- Assignment Search n'évalue pas les filtres d'affectation et ne simule pas l'ajout ou le retrait d'un groupe. Il ne lit pas les anciens modèles de sécurité du point de terminaison (`intents`) ni Windows 365. Groupes et utilisateurs se cherchent par le début du nom, pas par un mot au milieu.
 - OpenIntuneBaseline : la carte montre un instantané de la baseline (commit dans `setting-inspector/data/OIB-NOTICE.md`), à régénérer à chaque version OIB ; seules les stratégies Settings Catalog sont reprises (pas les stratégies de conformité ni de mise à jour).
 - Dans une iframe du portail, la carte de paramètre s'ancre au bord droit de l'iframe, pas de la fenêtre.
 - Le niveau 2 de Settings Explainer dépend de la structure des pages Learn ; si elle change, la carte garde les niveaux 1 et 3.
@@ -405,6 +430,7 @@ cd ../as-built && node test.js
 cd ../setting-inspector && node test.js
 cd ../settings-explainer && node test.js
 cd ../assignment-lens && node test.js
+cd ../assignment-search && node test.js
 cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
 cd ../policy-import && node test.js
