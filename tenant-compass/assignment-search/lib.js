@@ -78,9 +78,10 @@
     return null;
   }
 
-  // Object open in the portal, read from the blade URL: managed device (mdmDeviceId), user (userId) or group (groupId).
+  // Object open in the portal, read from the blade URL: managed device (managedDeviceId in ManagedDeviceMenu, mdmDeviceId
+  // in older blades), user (userId) or group (groupId).
   // ponytail: device before user before group when a URL names several; the #view URLs seen so far name one blade only.
-  const PAGE = [['device', 'mdmDeviceId'], ['user', 'userId'], ['group', 'groupId']]
+  const PAGE = [['device', '(?:managed|mdm)DeviceId'], ['user', 'userId'], ['group', 'groupId']]
     .map(([type, key]) => [type, new RegExp(`/${key}/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?=[/?]|$)`, 'i')]);
   function pageRef(hash) {
     let h = String(hash || '');

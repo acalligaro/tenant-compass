@@ -45,6 +45,7 @@ assert.strictEqual(L.memberOfUrl('policy', { id: ID }), null);
 
 // ---------- object open in the portal ----------
 
+assert.deepStrictEqual(L.pageRef(`#view/Microsoft_Intune_ManagedDevices/ManagedDeviceMenu.MenuView/~/overview/managedDeviceId/${ID}`), { type: 'device', id: ID });
 assert.deepStrictEqual(L.pageRef(`#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId/${ID}`), { type: 'device', id: ID });
 assert.deepStrictEqual(L.pageRef(`#view/Microsoft_AAD_UsersAndTenants/UserProfileMenuBlade/~/overview/userId/${ID}/hidePreviewBanner~/true`), { type: 'user', id: ID });
 assert.deepStrictEqual(L.pageRef(`#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Overview/groupId/${ID.toUpperCase()}/menuId/`), { type: 'group', id: ID });
