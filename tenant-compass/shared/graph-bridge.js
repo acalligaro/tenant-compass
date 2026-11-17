@@ -1,4 +1,4 @@
-// MAIN world, shared by the features that write to the tenant (Policy Import, Bulk Assignment). Each one calls the factory once.
+// MAIN world, shared by Policy Import, Bulk Assignment, Scope Tags Clean up and Assignment Search (reads only). Each one calls the factory once.
 // Every frame: observes the bearer token the portal sends to graph.microsoft.com (memory only) and runs closed operations.
 // Top frame: finds the frame holding a token and relays calls to it. Messages carry an operation name, never a URL or a token.
 (() => {
@@ -157,6 +157,7 @@
     return { status: 200, body: { value } };
   }
 
+  bridge.read = read;
   bridge.readAll = readAll;
   bridge.assignOps = A => ({
     tags: token => readAll(A.TAGS_URL, token),

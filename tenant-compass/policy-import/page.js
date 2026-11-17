@@ -51,7 +51,7 @@
   sheet.replaceSync(`
     :host { all: initial; color-scheme: light; }
     * { box-sizing: border-box; font: 13px/1.45 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
-    .fab { position: fixed; left: 20px; bottom: 124px; z-index: 2147483000; background: linear-gradient(135deg, #0078d4, #5b5fc7); color: #fff; border: 0;
+    .fab { position: fixed; left: 20px; bottom: 176px; z-index: 2147483000; background: linear-gradient(135deg, #0078d4, #5b5fc7); color: #fff; border: 0;
            border-radius: 999px; padding: 10px 18px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 20px rgba(0,120,212,.35); }
     .panel { position: fixed; left: 240px; bottom: 20px; z-index: 2147483001; width: 500px; max-height: 76vh; display: flex; flex-direction: column;
              background: #fff; color: #1b1a19; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.22), 0 0 0 1px rgba(0,0,0,.05); }
