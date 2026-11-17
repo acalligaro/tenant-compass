@@ -43,6 +43,15 @@ assert.strictEqual(L.memberOfUrl('device', { id: 'm1', entraId: '' }), null);
 assert.strictEqual(L.memberOfUrl('user', { id: '../me' }), null);
 assert.strictEqual(L.memberOfUrl('policy', { id: ID }), null);
 
+// ---------- object open in the portal ----------
+
+assert.deepStrictEqual(L.pageRef(`#view/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/~/overview/mdmDeviceId/${ID}`), { type: 'device', id: ID });
+assert.deepStrictEqual(L.pageRef(`#view/Microsoft_AAD_UsersAndTenants/UserProfileMenuBlade/~/overview/userId/${ID}/hidePreviewBanner~/true`), { type: 'user', id: ID });
+assert.deepStrictEqual(L.pageRef(`#view/Microsoft_AAD_IAM/GroupDetailsMenuBlade/~/Overview/groupId/${ID.toUpperCase()}/menuId/`), { type: 'group', id: ID });
+assert.deepStrictEqual(L.pageRef(`#view/X/~/overview/mdmDeviceId/${ID}/userId/${OTHER}`), { type: 'device', id: ID });
+assert.deepStrictEqual(L.pageRef(encodeURIComponent(`#view/X/~/userId/${ID}`)), { type: 'user', id: ID });
+for (const h of [`#view/Microsoft_Intune_DeviceSettings/PolicySummaryBlade/policyId/${ID}`, `#view/X/userId/${ID}x`, `#view/X/userId/../me`, '', null]) assert.strictEqual(L.pageRef(h), null, String(h));
+
 // ---------- resolve ----------⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
 
 const grp = (id, extra = {}) => ({ target: { '@odata.type': G + 'groupAssignmentTarget', groupId: id, ...extra } });

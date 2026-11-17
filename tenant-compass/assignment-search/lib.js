@@ -78,6 +78,17 @@
     return null;
   }
 
+  // Object open in the portal, read from the blade URL: managed device (mdmDeviceId), user (userId) or group (groupId).
+  // ponytail: device before user before group when a URL names several; the #view URLs seen so far name one blade only.
+  const PAGE = [['device', 'mdmDeviceId'], ['user', 'userId'], ['group', 'groupId']]
+    .map(([type, key]) => [type, new RegExp(`/${key}/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?=[/?]|$)`, 'i')]);
+  function pageRef(hash) {
+    let h = String(hash || '');
+    try { h = decodeURIComponent(h); } catch {}
+    for (const [type, re] of PAGE) { const m = re.exec(h); if (m) return { type, id: m[1].toLowerCase() }; }
+    return null;
+  }
+
   // ---------- what reaches the object ----------
 
   // What an assignment targets: a group ID, 'allUsers' or 'allDevices'. null: another kind of target.
@@ -153,7 +164,7 @@
     return ['assignment-search', type, safe, date].filter(Boolean).join('-') + '.json';
   }
 
-  const api = { KINDS: [...SOURCES.keys()], TYPES, LIMIT, FILTERS_URL, listUrl, searchUrl, found, memberOfUrl, targetRef, assignmentsOf, resolve, unassigned, exportDoc, exportName };
+  const api = { KINDS: [...SOURCES.keys()], TYPES, LIMIT, FILTERS_URL, listUrl, searchUrl, found, memberOfUrl, pageRef, targetRef, assignmentsOf, resolve, unassigned, exportDoc, exportName };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.AssignmentSearchLib = api; // always: a stray `module` global must not hide the lib from the page
 })();

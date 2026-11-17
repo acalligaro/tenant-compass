@@ -171,6 +171,7 @@ Tenant detection, by priority: URL (`tid=`, `tenantId=`, `ctid=`, `#@domain`), d
 3. Pick the object in the list. The panel shows the policies and apps that target it, in two parts: **Included** and **Excluded**.
 4. **Export (JSON)** downloads the list shown.
 
+- **Open object**: on the page of a user, a device or a group in the portal, the panel picks it and analyses it as soon as it opens. It then follows the navigation: opening another user, device or group runs the analysis again.
 - **What counts**:
   - group: its direct assignments and those of its parent groups (when it is a member of another group). Neither "All users" nor "All devices";
   - user: its groups, nested ones included, and "All users";

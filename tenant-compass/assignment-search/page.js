@@ -125,6 +125,20 @@
     renderResults();
   }
 
+  // User, device or group open in the portal: picked and analysed at once (its ID goes through the usual search).
+  // Checked when the panel opens, then every second: the shell changes blades with pushState, which fires no event.
+  let pageKey = '';
+  function syncPage() {
+    const ref = L.pageRef(location.hash), key = ref ? ref.type + ':' + ref.id : '';
+    if (key === pageKey) return false;
+    pageKey = key;
+    if (!ref) return false;
+    ui.type.value = ref.type;
+    ui.search.value = ref.id;
+    typeChanged();
+    return true;
+  }
+
   function typeChanged() {
     const type = ui.type.value, searchable = L.TYPES.includes(type);
     ui.searchRow.hidden = ui.pickRow.hidden = !searchable;
@@ -249,7 +263,9 @@
       if (!tenant) return;
       clearInterval(poll);
       if (tenant.tid !== loadedTid) loading = null; // another tenant in this tab: its lists are read again
-      typeChanged();
+      pageKey = '';
+      if (!syncPage()) typeChanged();
+      poll = setInterval(syncPage, 1000);
     };
     look();
     poll = setInterval(look, 2000); // the token shows up with the portal's next Graph call
