@@ -15,6 +15,7 @@
     filters: token => bridge.readAll(L.FILTERS_URL, token),
     search: (token, kind, { type, q } = {}) => bridge.read(L.searchUrl(type, q), token),
     memberOf: (token, kind, { type, subject } = {}) => bridge.readAll(L.memberOfUrl(type, subject), token),
+    memberOfDirect: (token, kind, { type, subject } = {}) => bridge.readAll(L.memberOfUrl(type, subject, true), token),
   } });
   if (!graph) return;
 
@@ -97,6 +98,7 @@
   async function analyse() {
     const type = ui.type.value, subject = picks.get(ui.pick.value), mine = ++viewSeq;
     view = null;
+    groupChoice = ''; // the groups differ from one object to the next
     renderResults();
     if (!subject) return;
     setStatus(t('status.members', { name: subject.name }));
@@ -110,6 +112,33 @@
     const { rows, unread } = L.resolve(type, subject, memberships, items);
     view = { type, subject, memberships, rows, unread, warn };
     setStatus([read && t(type === 'group' ? 'status.parents' : 'status.groups', { n: memberships.length }), coverageText(unread)].filter(Boolean).join(' '));
+    renderResults();
+    if (read && memberships.length) loadTree(mine, type, subject, memberships);
+  }
+
+  // Nesting of the group filter: the object's direct groups, then the direct parents of each of its groups, 4 at a time.
+  // Nothing nested (every group direct): no further read. A read refused: the list stays flat, with a warning.
+  // ponytail: one GET per group of the object; a $batch would cut it if objects with hundreds of groups show up.
+  async function loadTree(mine, type, subject, memberships) {
+    const ids = new Set(memberships.map(g => String(g.id).toLowerCase())), self = String(subject.id).toLowerCase();
+    const d = await call('memberOfDirect', { type, subject: { id: subject.id, entraId: subject.entraId } });
+    if (mine !== viewSeq || !view) return;
+    if (!ok(d)) { view.treeWarn = t('warn.tree', { error: errorText(d) }); return renderResults(); }
+    const direct = (d.body?.value || []).map(g => String(g.id).toLowerCase()).filter(id => ids.has(id));
+    const parents = new Map(type === 'group' ? [[self, direct]] : []); // a group studied is the root, its parents follow
+    let refused = null;
+    if (direct.length < ids.size) {
+      const queue = [...ids];
+      await Promise.all(Array.from({ length: 4 }, async () => {
+        for (let g; (g = queue.shift());) {
+          const r = await call('memberOfDirect', { type: 'group', subject: { id: g } });
+          if (ok(r)) parents.set(g, (r.body?.value || []).map(x => String(x.id).toLowerCase()).filter(id => ids.has(id) && id !== g));
+          else refused = r;
+        }
+      }));
+      if (mine !== viewSeq || !view) return;
+    }
+    Object.assign(view, { tree: L.groupTree(type === 'group' ? [self] : direct, parents), parents, ...(refused ? { treeWarn: t('warn.tree', { error: errorText(refused) }) } : {}) });
     renderResults();
   }
 
@@ -161,13 +190,31 @@
     ].filter(Boolean).join(' · ');
   }
 
-  // Category filter of the results (Configuration, Compliance, Applications, Scripts): kept from one object to the next.
-  let category = '';
-  const shownRows = () => (view ? view.rows.filter(r => !category || L.categoryOf(r.kind) === category) : []);
+  // Result filters. Category (Configuration, Compliance, Applications, Scripts): kept from one object to the next.
+  // Group: one group of the object with the groups it brings (nesting), or All users / All devices; reset per object.
+  // Each list counts the rows left by the other one.
+  let category = '', groupChoice = '';
+  const inCategory = rows => rows.filter(r => !category || L.categoryOf(r.kind) === category);
+  const inGroup = rows => (view?.type === 'unassigned' ? rows : L.byGroup(rows, groupChoice, view?.parents || new Map()));
+  const shownRows = () => (view ? inGroup(inCategory(view.rows)) : []);
   function renderCategories() {
-    const n = c => view.rows.filter(r => L.categoryOf(r.kind) === c).length;
-    ui.cat.replaceChildren(option('', t('cat.all', { n: view.rows.length })), ...L.CATEGORIES.map(c => option(c, t('cat.' + c, { n: n(c) }))));
+    const base = inGroup(view.rows), n = c => base.filter(r => L.categoryOf(r.kind) === c).length;
+    ui.cat.replaceChildren(option('', t('cat.all', { n: base.length })), ...L.CATEGORIES.map(c => option(c, t('cat.' + c, { n: n(c) }))));
     ui.cat.value = category;
+  }
+  // Groups as a tree (indented), only those that bring at least one row. Before the nesting is read: a flat list.
+  function renderGroups() {
+    ui.grp.hidden = view.type === 'unassigned';
+    if (ui.grp.hidden) return;
+    const base = inCategory(view.rows), parents = view.parents || new Map(), count = c => L.byGroup(base, c, parents).length;
+    const self = String(view.subject.id).toLowerCase(), nested = view.type === 'group' ? 1 : 0;
+    const tree = view.tree || [...(nested ? [{ id: self, depth: 0 }] : []), ...view.memberships.map(g => ({ id: String(g.id).toLowerCase(), depth: nested }))];
+    const label = g => `${'   '.repeat(g.depth)}${g.depth ? '└ ' : ''}${groupName(g.id)}`;
+    const virtual = view.type === 'user' ? ['allUsers'] : view.type === 'device' ? ['allDevices'] : [];
+    ui.grp.replaceChildren(option('', t('grp.all', { n: base.length })),
+      ...tree.map(g => [g, count(g.id)]).filter(([g, n]) => n || g.id === groupChoice).map(([g, n]) => option(g.id, `${label(g)} (${n})`)),
+      ...virtual.map(v => [v, count(v)]).filter(([v, n]) => n || v === groupChoice).map(([v, n]) => option(v, `${t('how.' + v)} (${n})`)));
+    ui.grp.value = groupChoice;
   }
 
   // Text only goes through textContent: no HTML parsing of Graph data.
@@ -178,6 +225,7 @@
     ui.catRow.hidden = !view;
     if (!view) return ui.results.replaceChildren();
     renderCategories();
+    renderGroups();
     const row = r => el('div', { className: 'row' }, el('div', { textContent: r.name }),
       el('small', { textContent: [r.type, r.platform].filter(Boolean).join(' · ') }),
       ...(r.via || []).map(v => el('small', { className: v.mode === 'exclude' ? 'ex' : 'in', textContent: viaText(v) })));
@@ -186,7 +234,7 @@
       return ui.results.replaceChildren(el('p', { className: 'm', textContent: t('res.unassignedHint') }), ...section(t('res.unassigned', { n: rows.length }), rows));
     }
     const inc = rows.filter(r => r.state === 'included'), exc = rows.filter(r => r.state === 'excluded');
-    ui.results.replaceChildren(...(view.warn ? [el('p', { className: 'warn', textContent: view.warn })] : []),
+    ui.results.replaceChildren(...[view.warn, view.treeWarn].filter(Boolean).map(w => el('p', { className: 'warn', textContent: w })),
       ...section(t('res.included', { n: inc.length }), inc), ...section(t('res.excluded', { n: exc.length }), exc));
   }
 
@@ -195,7 +243,7 @@
     const rows = shownRows();
     if (!rows.length) return;
     const now = new Date().toISOString();
-    const doc = L.exportDoc({ type: view.type, subject: view.subject, memberships: view.memberships, rows, tenantId: loadedTid, exportedAt: now, category,
+    const doc = L.exportDoc({ type: view.type, subject: view.subject, memberships: view.memberships, rows, tenantId: loadedTid, exportedAt: now, category, group: view.type === 'unassigned' ? '' : groupChoice,
       coverage: { failedTypes: failed.map(label), unreadObjects: view.unread, ...(view.warn ? { warning: view.warn } : {}) } },
     { group: groupName, filter: id => filters.get(id) || '' });
     const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' })), download: L.exportName(view.type, view.subject?.name, now.slice(0, 10)) });
@@ -256,7 +304,8 @@
     ui.searchRow = el('div', { className: 'bar' }, ui.search);
     ui.pickRow = el('div', { className: 'bar' }, ui.pick);
     ui.cat = el('select', { title: t('ui.category'), ariaLabel: t('ui.category'), onchange: () => { category = ui.cat.value; renderResults(); } });
-    ui.catRow = el('div', { className: 'bar', hidden: true }, ui.cat);
+    ui.grp = el('select', { title: t('ui.group'), ariaLabel: t('ui.group'), onchange: () => { groupChoice = ui.grp.value; renderResults(); } });
+    ui.catRow = el('div', { className: 'bar', hidden: true }, ui.cat, ui.grp);
     ui.results = el('div', { className: 'list' });
     ui.status = el('div', { className: 'status', role: 'status' });
     ui.export = el('button', { className: 'act', textContent: t('ui.export'), title: t('ui.exportTitle'), disabled: true, onclick: exportJson });

@@ -79,8 +79,9 @@
 
   // Groups the object belongs to, nested ones included. A group: its parent groups. A device: through its Entra object
   // (deviceId = azureADDeviceId of the managed device). null when there is nothing to read.
-  function memberOfUrl(type, subject) {
-    const tail = '/transitiveMemberOf/microsoft.graph.group?$select=id,displayName';
+  // direct: only the groups the object is a direct member of (memberOf), used to draw the nesting of the group filter.
+  function memberOfUrl(type, subject, direct = false) {
+    const tail = `/${direct ? 'memberOf' : 'transitiveMemberOf'}/microsoft.graph.group?$select=id,displayName`;
     if ((type === 'group' || type === 'user') && GUID.test(subject?.id || '')) return `${ROOT}${type}s/${subject.id}${tail}`;
     if (type === 'device' && GUID.test(subject?.entraId || '')) return `${ROOT}devices(deviceId='${subject.entraId}')${tail}`;
     return null;
@@ -143,17 +144,44 @@
     return { rows, unread };
   }
 
+  // ---------- group filter ----------
+
+  // Groups through which an object gets its policies, as a tree: the direct groups first (depth 0), each followed by the
+  // groups it is itself a member of (depth + 1). parents: Map groupId -> [parent ids], lower case. Each group once.
+  function groupTree(direct, parents) {
+    const out = [], seen = new Set();
+    const walk = (id, depth) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      out.push({ id, depth });
+      for (const p of parents.get(id) || []) walk(p, depth + 1);
+    };
+    for (const id of direct) walk(String(id).toLowerCase(), 0);
+    return out;
+  }
+
+  // Rows that reach the object through one choice: 'allUsers', 'allDevices', or a group with every group the object
+  // belongs to through it (its parents, nested included). No choice: every row.
+  function byGroup(rows, choice, parents) {
+    if (!choice) return rows;
+    if (choice === 'allUsers' || choice === 'allDevices') return rows.filter(r => r.via?.some(v => v.how === choice));
+    const reached = new Set();
+    const walk = id => { if (reached.has(id)) return; reached.add(id); for (const p of parents.get(id) || []) walk(p); };
+    walk(String(choice).toLowerCase());
+    return rows.filter(r => r.via?.some(v => v.how !== 'allUsers' && v.how !== 'allDevices' && reached.has(String(v.ref).toLowerCase())));
+  }
+
   // Objects read whole with no assignment at all. Those whose assignments were not read whole are left out.
   const unassigned = items => (items || []).filter(i => Array.isArray(i.assignments) && !i.assignments.length);
 
   // ---------- JSON export ----------
 
   // names: { group(id), filter(id) } -> display name. Rows of resolve()⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ or unassigned(), already labelled by the page.
-  // category: the result filter chosen, when not "all" (rows are then already filtered by the page).
-  function exportDoc({ type, subject, memberships, rows, tenantId, exportedAt, coverage, category }, names) {
+  // category, group: the result filters chosen, when not "all" (rows are then already filtered by the page).
+  function exportDoc({ type, subject, memberships, rows, tenantId, exportedAt, coverage, category, group }, names) {
     const target = ref => (ref === 'allUsers' || ref === 'allDevices' ? ref : { id: ref, name: names.group(ref) || ref });
     return {
-      exportedAt, tenantId, type, ...(category ? { category } : {}),
+      exportedAt, tenantId, type, ...(category ? { category } : {}), ...(group ? { group: target(group) } : {}),
       ...(subject ? { subject: { id: subject.id, name: subject.name, ...(subject.detail ? { detail: subject.detail } : {}),
         ...(subject.entraId ? { entraDeviceId: subject.entraId } : {}) } } : {}),
       ...(memberships ? { memberships: memberships.map(g => ({ id: g.id, name: g.displayName || g.name || g.id })) } : {}),
@@ -174,7 +202,7 @@
     return ['assignment-search', type, safe, date].filter(Boolean).join('-') + '.json';
   }
 
-  const api = { KINDS: [...SOURCES.keys()], CATEGORIES, categoryOf, TYPES, LIMIT, FILTERS_URL, listUrl, searchUrl, found, memberOfUrl, pageRef, targetRef, assignmentsOf, resolve, unassigned, exportDoc, exportName };
+  const api = { KINDS: [...SOURCES.keys()], CATEGORIES, categoryOf, TYPES, LIMIT, FILTERS_URL, listUrl, searchUrl, found, memberOfUrl, pageRef, targetRef, assignmentsOf, resolve, groupTree, byGroup, unassigned, exportDoc, exportName };
   if (typeof module === 'object' && module && typeof module.exports === 'object') module.exports = api; // node (test.js)
   globalThis.AssignmentSearchLib = api; // always: a stray `module` global must not hide the lib from the page
 })();

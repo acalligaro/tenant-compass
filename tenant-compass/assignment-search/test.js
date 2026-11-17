@@ -48,6 +48,36 @@ assert.strictEqual(L.memberOfUrl('device', { id: 'm1', entraId: ID }), `${ROOT}d
 assert.strictEqual(L.memberOfUrl('device', { id: 'm1', entraId: '' }), null);
 assert.strictEqual(L.memberOfUrl('user', { id: '../me' }), null);
 assert.strictEqual(L.memberOfUrl('policy', { id: ID }), null);
+// Direct memberships only (nesting of the group filter)
+assert.strictEqual(L.memberOfUrl('user', { id: ID }, true), `${ROOT}users/${ID}/memberOf/microsoft.graph.group?$select=id,displayName`);
+assert.strictEqual(L.memberOfUrl('device', { id: 'm1', entraId: ID }, true), `${ROOT}devices(deviceId='${ID}')/memberOf/microsoft.graph.group?$select=id,displayName`);
+assert.strictEqual(L.memberOfUrl('group', { id: 'x' }, true), null);
+
+// ---------- group filter ----------
+
+{
+  const [GA, GB, GC, GD] = ['a', 'b', 'c', 'd'].map(c => c.repeat(8) + '-0000-0000-0000-000000000000');
+  // The object is a direct member of B and D; B is a member of A, A of C.
+  const parents = new Map([[GB, [GA]], [GA, [GC]]]);
+  assert.deepStrictEqual(L.groupTree([GB.toUpperCase(), GD], parents), [{ id: GB, depth: 0 }, { id: GA, depth: 1 }, { id: GC, depth: 2 }, { id: GD, depth: 0 }]);
+  assert.deepStrictEqual(L.groupTree([GA], new Map([[GA, [GB]], [GB, [GA]]])).map(g => g.id), [GA, GB]); // a cycle ends
+  const rows = [
+    { key: 'r1', via: [{ how: 'group', ref: GA, mode: 'include' }] },
+    { key: 'r2', via: [{ how: 'group', ref: GD.toUpperCase(), mode: 'include' }] },
+    { key: 'r3', via: [{ how: 'allUsers', ref: 'allUsers', mode: 'include' }] },
+    { key: 'r4', via: [{ how: 'allUsers', ref: 'allUsers', mode: 'include' }, { how: 'group', ref: GC, mode: 'exclude' }] },
+  ];
+  const keys = choice => L.byGroup(rows, choice, parents).map(r => r.key);
+  assert.deepStrictEqual(keys(GB), ['r1', 'r4']); // B brings A and C, nested
+  assert.deepStrictEqual(keys(GA), ['r1', 'r4']);
+  assert.deepStrictEqual(keys(GC), ['r4']);
+  assert.deepStrictEqual(keys(GD), ['r2']);
+  assert.deepStrictEqual(keys('allUsers'), ['r3', 'r4']);
+  assert.deepStrictEqual(keys(''), ['r1', 'r2', 'r3', 'r4']);
+  assert.deepStrictEqual(L.byGroup(rows, GB, new Map()).map(r => r.key), []); // nesting unknown: B only
+  // A group studied itself: what targets it directly or through its parents
+  assert.deepStrictEqual(L.byGroup([{ key: 'p', via: [{ how: 'parent', ref: GA }] }, { key: 'd', via: [{ how: 'direct', ref: GB }] }], GB, parents).map(r => r.key), ['p', 'd']);
+}
 
 // ---------- object open in the portal ----------
 
@@ -121,6 +151,10 @@ const plain = L.exportDoc({ type: 'unassigned', rows: [{ name: 'None', id: 'x', 
 assert.deepStrictEqual(plain.results, [{ name: 'None', id: 'x', kind: 'dc', type: 'Profile', platform: '' }]);
 assert.ok(!('subject' in plain) && !('memberships' in plain) && !('category' in plain));
 assert.strictEqual(L.exportDoc({ type: 'unassigned', rows: [], tenantId: 't', exportedAt: 'd', coverage: {}, category: 'apps' }, { group: () => '', filter: () => '' }).category, 'apps');
+const withGroup = (group) => L.exportDoc({ type: 'user', rows: [], tenantId: 't', exportedAt: 'd', coverage: {}, group }, { group: id => (id === ID ? 'Sales' : ''), filter: () => '' }).group;
+assert.deepStrictEqual(withGroup(ID), { id: ID, name: 'Sales' });
+assert.strictEqual(withGroup('allDevices'), 'allDevices');
+assert.strictEqual(withGroup(''), undefined);
 
 assert.strictEqual(L.exportName('group', 'GRP / Sales: EU', '2026-11-17'), 'assignment-search-group-GRP_Sales_EU-2026-11-17.json');
 assert.strictEqual(L.exportName('unassigned', '', '2026-11-17'), 'assignment-search-unassigned-2026-11-17.json');

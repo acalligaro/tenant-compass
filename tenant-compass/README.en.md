@@ -172,6 +172,7 @@ Tenant detection, by priority: URL (`tid=`, `tenantId=`, `ctid=`, `#@domain`), d
 4. **Export (JSON)** downloads the list shown.
 
 - **Filter by type**: above the results, a drop-down list keeps one category only, with its number of objects: **Configuration** (settings catalog, profiles, ADMX, enrollment, Autopilot, Windows updates), **Compliance**, **Applications** (apps, app configuration and app protection), **Scripts and remediations**. The choice is kept from one object to the next, and the export holds only the category shown.
+- **Filter by group**: next to it, a drop-down list shows the object's groups as a tree: its direct groups, and indented under each the groups it is a member of through it (nested groups). Choosing a group keeps only the policies that come through that group or its parent groups. **All users** / **All devices** are listed too. Only the groups that bring at least one policy are listed, with their number. The nesting needs one read per group of the object, done only when there are nested groups.
 - **Open object**: on the page of a user, a device or a group in the portal, the panel picks it and analyses it as soon as it opens. It then follows the navigation: opening another user, device or group runs the analysis again.
 - **What counts**:
   - group: its direct assignments and those of its parent groups (when it is a member of another group). Neither "All users" nor "All devices";
