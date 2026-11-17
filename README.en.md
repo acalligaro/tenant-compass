@@ -10,7 +10,7 @@ Chrome / Edge extension (Manifest V3), toolbox for the Microsoft Intune portal. 
 
 | Folder | Extension | Role |
 |---|---|---|
-| [`tenant-compass/`](tenant-compass/README.en.md) ([Français](tenant-compass/README.md)) | **Tenant Compass** | Tenant Guard, As-Built, setting card (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, PIM shortcut, Policy Import, Bulk Assignment and Scope Tags Clean up in a single extension, each toggled separately from the menu, in French or English |
+| [`tenant-compass/`](tenant-compass/README.en.md) ([Français](tenant-compass/README.md)) | **Tenant Compass** | Tenant Guard, As-Built, setting card (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, PIM shortcut (with the Entra ID, Intune and Defender shortcuts), Policy Import, Bulk Assignment and Scope Tags Clean up in a single extension, each toggled separately from the menu, in French or English |
 
 Tenant Compass technical documentation (in French): [`tenant-compass/ARCHITECTURE.md`](tenant-compass/ARCHITECTURE.md).
 
@@ -28,12 +28,15 @@ node tenant-compass/tenant-guard/test.js
 node tenant-compass/as-built/test.js
 node tenant-compass/setting-inspector/test.js
 node tenant-compass/assignment-lens/test.js
+node tenant-compass/assignment-search/test.js
 node tenant-compass/change-snapshot/test.js
 node tenant-compass/portal-language/test.js
+node tenant-compass/pim/test.js
 node tenant-compass/settings-explainer/test.js
 node tenant-compass/policy-import/test.js
 node tenant-compass/bulk-assign/test.js
 node tenant-compass/scope-cleanup/test.js
+node tenant-compass/shared/test.js
 ```
 
 ## Security

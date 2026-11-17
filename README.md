@@ -10,7 +10,7 @@ Extension Chrome / Edge (Manifest V3), boîte à outils pour le portail Microsof
 
 | Dossier | Extension | Rôle |
 |---|---|---|
-| [`tenant-compass/`](tenant-compass/README.md) ([English](tenant-compass/README.en.md)) | **Tenant Compass** | Tenant Guard, As-Built, carte de paramètre (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, Raccourci PIM, Policy Import, Bulk Assignment et Scope Tags Clean up dans une seule extension, activables séparément depuis le menu, en français ou en anglais |
+| [`tenant-compass/`](tenant-compass/README.md) ([English](tenant-compass/README.en.md)) | **Tenant Compass** | Tenant Guard, As-Built, carte de paramètre (Setting Inspector, Settings Explainer, OpenIntuneBaseline), Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, Raccourci PIM (avec les raccourcis Entra ID, Intune et Defender), Policy Import, Bulk Assignment et Scope Tags Clean up dans une seule extension, activables séparément depuis le menu, en français ou en anglais |
 
 Documentation technique de Tenant Compass : [`tenant-compass/ARCHITECTURE.md`](tenant-compass/ARCHITECTURE.md).
 
@@ -28,12 +28,15 @@ node tenant-compass/tenant-guard/test.js
 node tenant-compass/as-built/test.js
 node tenant-compass/setting-inspector/test.js
 node tenant-compass/assignment-lens/test.js
+node tenant-compass/assignment-search/test.js
 node tenant-compass/change-snapshot/test.js
 node tenant-compass/portal-language/test.js
+node tenant-compass/pim/test.js
 node tenant-compass/settings-explainer/test.js
 node tenant-compass/policy-import/test.js
 node tenant-compass/bulk-assign/test.js
 node tenant-compass/scope-cleanup/test.js
+node tenant-compass/shared/test.js
 ```
 
 ## Sécurité

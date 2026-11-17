@@ -2,7 +2,7 @@
 
 *A toolbox for the Microsoft Intune admin center.* · [Version française](README.md)
 
-Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, PIM shortcut, Policy Import, Bulk Assignment and Scope Tags Clean up in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
+Tenant Guard, One-click As-Built, Setting Inspector, Settings Explainer, Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, PIM shortcut (with the Entra ID, Intune and Defender shortcuts), Policy Import, Bulk Assignment and Scope Tags Clean up in a single Chrome / Edge extension (Manifest V3). Each feature is turned on or off from the extension menu. No app registration in the tenant: the extension reuses the portal's own Microsoft Graph session.
 
 Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -46,7 +46,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Settings Explainer | Same card, explanation section: written text, live Learn page, values, default. Can be used on its own | Same card |
 | OpenIntuneBaseline | Same card, OIB section: value set by the OpenIntuneBaseline community baseline and the policy concerned. Can be used on its own | Same card |
 | Assignment Lens | Included / excluded groups, members, filters, overlaps of the displayed policy | Button above As-Built |
-| Assignment Search | Policies and apps assigned to a group, a user or a device (nested groups, exclusions, filters), or with no assignment; JSON export | Button above Assignment Lens (Intune) |
+| Assignment Search | Policies and apps assigned to a group, a user or a device (nested groups, exclusions, filters), or with no assignment; JSON export. Picks up the user, device or group open in the portal | Button above Assignment Lens (Intune) |
 | Change Snapshot | Local change log: before / after diff, author, ticket number, JSON / CSV export | Window at the bottom right after a save; log from the menu |
 | Set Tenant Language | Switches the console between two preset languages in one click | 🌐 buttons in the menu; Intune, Azure, Entra, Defender, Purview |
 | PIM shortcut | Opens PIM > My roles (eligible or active assignments), Entra ID, Intune or Defender on the active tab's tenant in one click | 🔑 PIM eligible, 🔑 PIM active, 🪪 Entra ID, 💻 Intune and 🛡️ Defender buttons in the menu |
@@ -439,6 +439,7 @@ cd ../assignment-lens && node test.js
 cd ../assignment-search && node test.js
 cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
+cd ../pim && node test.js
 cd ../policy-import && node test.js
 cd ../bulk-assign && node test.js
 cd ../scope-cleanup && node test.js

@@ -2,7 +2,7 @@
 
 *Boîte à outils pour le portail Microsoft Intune.* · [English version](README.en.md)
 
-Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, Raccourci PIM, Policy Import, Bulk Assignment et Scope Tags Clean up réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
+Tenant Guard, As-Built en un clic, Setting Inspector, Settings Explainer, Assignment Lens, Assignment Search, Change Snapshot, Set Tenant Language, Raccourci PIM (avec les raccourcis Entra ID, Intune et Defender), Policy Import, Bulk Assignment et Scope Tags Clean up réunis dans une seule extension Chrome / Edge (Manifest V3). Chaque fonction s'active ou se désactive depuis le menu de l'extension. Aucune application à inscrire dans le tenant : l'extension réutilise la session Microsoft Graph du portail.
 
 Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -46,7 +46,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Settings Explainer | Même carte, section explication : texte rédigé, page Learn lue en direct, valeurs, valeur par défaut. Activable seule | Même carte |
 | OpenIntuneBaseline | Même carte, section OIB : valeur configurée par la baseline communautaire OpenIntuneBaseline et stratégie concernée. Activable seule | Même carte |
 | Assignment Lens | Groupes inclus / exclus, membres, filtres, chevauchements de la stratégie affichée | Bouton au-dessus d'As-Built |
-| Assignment Search | Stratégies et applications affectées à un groupe, un utilisateur ou un appareil (groupes imbriqués, exclusions, filtres), ou sans affectation ; export JSON | Bouton au-dessus d'Assignment Lens (Intune) |
+| Assignment Search | Stratégies et applications affectées à un groupe, un utilisateur ou un appareil (groupes imbriqués, exclusions, filtres), ou sans affectation ; export JSON. Reprend l'utilisateur, l'appareil ou le groupe ouvert dans le portail | Bouton au-dessus d'Assignment Lens (Intune) |
 | Change Snapshot | Journal local des modifications : différence avant / après, auteur, n° de ticket, export JSON / CSV | Fenêtre en bas à droite après un enregistrement ; journal depuis le menu |
 | Set Tenant Language | Bascule la console entre deux langues prédéfinies, en 1 clic | Boutons 🌐 du menu ; Intune, Azure, Entra, Defender, Purview |
 | Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives), Entra ID, Intune ou Defender sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible, 🔑 PIM actif, 🪪 Entra ID, 💻 Intune et 🛡️ Defender du menu |
@@ -441,6 +441,7 @@ cd ../assignment-lens && node test.js
 cd ../assignment-search && node test.js
 cd ../change-snapshot && node test.js
 cd ../portal-language && node test.js
+cd ../pim && node test.js
 cd ../policy-import && node test.js
 cd ../bulk-assign && node test.js
 cd ../scope-cleanup && node test.js
