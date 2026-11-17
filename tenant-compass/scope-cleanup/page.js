@@ -1,7 +1,7 @@
 // MAIN world, every frame of the Intune portal. Off by default: it⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ changes existing policies and apps.
 // All frames: the Graph bridge observes the portal's token and serves the top frame.
-// Top frame: floating button, list of the objects holding the Default⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ scope tag with all their tags, confirmation, sequential run.
-// An object with Default only can be checked, but nothing is ever sent for it (scope-cleanup/lib.js).
+// Top frame: floating button, list of the objects holding the Default⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ scope tag (or the one chosen in the tag list) with all
+// their tags, confirmation, sequential run. An object with that tag only can be checked, but nothing is ever sent for it (scope-cleanup/lib.js).
 (() => {
   const C = globalThis.ScopeCleanupLib, A = globalThis.TenantCompassAssign, P = globalThis.PolicyImportLib, S = globalThis.AsBuiltLib, bridge = window.__tenantCompassGraphBridge;
   if (!C || !A || !P || !S || !bridge) return;
@@ -36,10 +36,10 @@
     .row small { display: block; color: #605e5c; font-size: 11.5px; }
     .row small.failed { color: #a4262c; }
     .row small.done { color: #107c10; }
-    .row small.unknown, .row small.onlyDefault { color: #8a5300; font-weight: 600; }
+    .row small.unknown, .row small.onlyTag { color: #8a5300; font-weight: 600; }
     .chip { display: inline-block; margin: 2px 4px 0 0; padding: 0 7px; border-radius: 999px; background: #eff6fc; color: #005a9e; font-size: 11px; }
     .chip.tag { background: #f3f2f1; color: #323130; }
-    .chip.default { background: #edebe9; color: #1b1a19; font-weight: 600; }
+    .chip.target { background: #edebe9; color: #1b1a19; font-weight: 600; }
     .chip.warn { background: #fff4ce; color: #8a5300; font-weight: 600; }
     input[type=checkbox] { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: #0078d4; cursor: pointer; }
     .foot { padding: 12px 16px 14px; border-top: 1px solid #f3f2f1; display: flex; flex-direction: column; gap: 10px; }
@@ -64,7 +64,8 @@
     .opt input { margin: 0; }
   `);
 
-  let panel = null, poll = 0, running = false, items = null, lastStatus = '', tagNames = new Map(), onlyRemovable = false;
+  // target: the scope tag chosen in the list, Default at first.
+  let panel = null, poll = 0, running = false, items = null, lastStatus = '', tagNames = new Map(), onlyRemovable = false, target = C.DEFAULT, loadNotes = [];
   const checked = new Set(), results = new Map(), ui = {};
 
   const directoryName = () => document.querySelector('.fxs-avatarmenu-tenant')?.textContent.trim() || '';
@@ -72,29 +73,54 @@
   const tagName = id => tagNames.get(id) || (id === C.DEFAULT ? 'Default' : id);
   function setStatus(text) { lastStatus = text; if (panel) ui.status.textContent = text; }
 
+  const removable = i => C.stateOf(i.tags, target) === 'removable';
+  // Objects holding the tag chosen, those the button can act on first (items are sorted by name, the sort is stable).
   function visible() {
     const q = ui.search.value.trim().toLowerCase(), kind = ui.type.value, os = ui.os.value;
-    return (items || []).filter(i => (!kind || i.kind === kind) && (!os || S.platformsOf(i).includes(os)) && (!q || String(i.name).toLowerCase().includes(q)) && C.keepRow(i.tags, results.has(i.key), onlyRemovable));
+    return (items || []).filter(i => (!kind || i.kind === kind) && (!os || S.platformsOf(i).includes(os)) && (!q || String(i.name).toLowerCase().includes(q)) && C.keepRow(i.tags, results.has(i.key), onlyRemovable, target))
+      .sort((a, b) => removable(b) - removable(a));
   }
 
   // What "check all" takes: with the filter on, only the objects the button can act on, not the rows already processed.⁣​​‌​‌​​​​​​‌​​‌​‍​⁣
-  const checkable = () => visible().filter(i => !onlyRemovable || C.stateOf(i.tags) === 'removable');
+  const checkable = () => visible().filter(i => !onlyRemovable || removable(i));
 
   function resultNote(r) {
     if (!r) return [];
-    const KEYS = { done: 'scopeCleanup.res.done', onlyDefault: 'scopeCleanup.res.onlyDefault', noDefault: 'scopeCleanup.res.noDefault', unreadable: 'scopeCleanup.res.unreadable', unknown: 'scopeCleanup.res.unknown', notSent: 'scopeCleanup.res.notSent' };
-    return [el('small', { className: r.status, textContent: T(KEYS[r.status] || r.error || '') })];
+    const KEYS = { done: 'scopeCleanup.res.done', onlyTag: 'scopeCleanup.res.onlyTag', absent: 'scopeCleanup.res.absent', unreadable: 'scopeCleanup.res.unreadable', unknown: 'scopeCleanup.res.unknown', notSent: 'scopeCleanup.res.notSent' };
+    return [el('small', { className: r.status, textContent: T(KEYS[r.status] || r.error || '', { tag: tagName(target) }) })];
+  }
+
+  // Counts for the tag chosen, then what the load could not read.
+  function countText() {
+    const states = (items || []).map(i => C.stateOf(i.tags, target)), n = s => states.filter(x => x === s).length;
+    return [T('scopeCleanup.status.count', { tag: tagName(target), total: n('removable') + n('onlyTag'), removable: n('removable'), only: n('onlyTag') }), ...loadNotes].join(' · ');
+  }
+
+  // The tag list: every tag of the tenant with the number of objects holding it, Default first.
+  function renderTags() {
+    if (!panel || !items) return;
+    ui.tag.replaceChildren(...C.tagChoices(items.map(i => i.tags), tagNames).map(c => el('option', { value: c.id, textContent: `${c.name} (${c.n})` })));
+    ui.tag.value = target;
+  }
+
+  // Another tag: the rows checked and the results shown were for the previous one, they go.
+  function tagChanged() {
+    target = ui.tag.value || C.DEFAULT;
+    checked.clear();
+    results.clear();
+    setStatus(countText());
+    renderList();
   }
 
   function renderList() {
     if (!panel) return;
     ui.list.replaceChildren(...visible().map(i => {
       const box = el('input', { type: 'checkbox', checked: checked.has(i.key), disabled: running, onchange: () => { box.checked ? checked.add(i.key) : checked.delete(i.key); renderGo(); } });
-      const state = C.stateOf(i.tags), done = results.get(i.key);
+      const state = C.stateOf(i.tags, target), done = results.get(i.key);
       return el('label', { className: 'row' }, box, el('span', {}, i.name,
         el('small', {}, i.type, ' ', ...S.platformsOf(i).map(o => el('span', { className: 'chip', textContent: o }))),
-        el('small', {}, ...i.tags.map(t => el('span', { className: t === C.DEFAULT ? 'chip default' : 'chip tag', textContent: tagName(t) })),
-          ...(state === 'onlyDefault' ? [el('span', { className: 'chip warn', textContent: T('scopeCleanup.chip.onlyDefault') })] : [])),
+        el('small', {}, ...i.tags.map(t => el('span', { className: t === target ? 'chip target' : 'chip tag', textContent: tagName(t) })),
+          ...(state === 'onlyTag' ? [el('span', { className: 'chip warn', textContent: T('scopeCleanup.chip.onlyTag', { tag: tagName(target) }) })] : [])),
         ...resultNote(done)));
     }));
     renderGo();
@@ -103,11 +129,11 @@
   function renderGo() {
     if (!panel) return;
     const n = selected().length;
-    ui.go.textContent = T('scopeCleanup.ui.go', { n });
+    ui.go.textContent = T('scopeCleanup.ui.go', { n, tag: tagName(target) });
     ui.go.disabled = running || !n;
     ui.export.disabled = !n;
-    ui.onlyBox.disabled = running;
-    ui.onlyText.textContent = T('scopeCleanup.ui.onlyRemovable', { n: (items || []).filter(i => C.stateOf(i.tags) === 'removable').length });
+    ui.onlyBox.disabled = ui.tag.disabled = running;
+    ui.onlyText.textContent = T('scopeCleanup.ui.onlyRemovable', { n: (items || []).filter(removable).length, tag: tagName(target) });
     const shown = checkable();
     ui.all.disabled = running || !shown.length;
     ui.all.checked = !!shown.length && shown.every(i => checked.has(i.key));
@@ -124,19 +150,17 @@
       if (error) { errors.push(T('asBuilt.src.' + kind)); return []; }
       const withTags = await C.resolveTags(kind, rows, graph.call);
       unreadable += withTags.filter(r => !r.tags).length;
-      // Only the objects holding Default: nothing to clean elsewhere.
-      return withTags.filter(r => r.tags?.includes(C.DEFAULT)).map(raw => ({ ...S.policySummary(kind, raw), key: kind + ':' + raw.id, tags: raw.tags }));
+      // Every object with readable tags: the tag list picks which ones are shown.
+      return withTags.filter(r => r.tags).map(raw => ({ ...S.policySummary(kind, raw), key: kind + ':' + raw.id, tags: raw.tags }));
     }));
-    // The objects the button can act on come first.
-    const rank = i => (C.stateOf(i.tags) === 'removable' ? 0 : 1);
-    items = lists.flat().sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name), 'fr'));
+    items = lists.flat().sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
     const oses = [...new Set(items.flatMap(S.platformsOf))].sort((a, b) => a.localeCompare(b, 'fr'));
     if (panel) ui.os.replaceChildren(el('option', { value: '', textContent: T('scopeCleanup.ui.allOs') }), ...oses.map(o => el('option', { value: o, textContent: o })));
-    const only = items.filter(i => C.stateOf(i.tags) === 'onlyDefault').length;
-    setStatus([T('scopeCleanup.status.count', { total: items.length, removable: items.length - only, only }),
-      ...(unreadable ? [T('scopeCleanup.status.unreadable', { n: unreadable })] : []),
+    loadNotes = [...(unreadable ? [T('scopeCleanup.status.unreadable', { n: unreadable })] : []),
       ...(errors.length ? [T('scopeCleanup.status.source', { list: errors.join(', ') })] : []),
-      ...(missing.length ? [T('scopeCleanup.status.noScope', { list: missing.map(k => T('asBuilt.src.' + k)).join(', ') })] : [])].join(' · '));
+      ...(missing.length ? [T('scopeCleanup.status.noScope', { list: missing.map(k => T('asBuilt.src.' + k)).join(', ') })] : [])];
+    setStatus(countText());
+    renderTags();
     renderList();
   }
 
@@ -156,27 +180,30 @@
   function askConfirm() {
     const todo = selected(), tenant = graph.tenantNow();
     if (!todo.length || !tenant) return;
-    const skipped = todo.filter(i => C.stateOf(i.tags) !== 'removable').length, acting = todo.length - skipped;
+    const tag = target, name = tagName(tag);
+    const skipped = todo.filter(i => !removable(i)).length, acting = todo.length - skipped;
     const close = () => dialog.remove();
     const cancel = el('button', { className: 'act ghost', textContent: T('scopeCleanup.confirm.cancel'), onclick: close });
-    const ok = el('button', { className: 'act', textContent: T('scopeCleanup.confirm.ok'), onclick: () => { close(); run(todo, tenant.tid); } });
+    const ok = el('button', { className: 'act', textContent: T('scopeCleanup.confirm.ok'), onclick: () => { close(); run(todo, tenant.tid, tag); } });
     const dialog = el('div', { className: 'dialog', onkeydown: e => { if (e.key === 'Escape') close(); } }, el('div', { className: 'card', role: 'dialog', ariaModal: 'true' },
-      el('h2', { textContent: T('scopeCleanup.confirm.title', { n: acting }) }),
+      el('h2', { textContent: T('scopeCleanup.confirm.title', { n: acting, tag: name }) }),
       el('p', { textContent: T('scopeCleanup.confirm.tenant', { directory: directoryName() || '?', tid: tenant.tid }) }),
-      el('p', { textContent: acting ? T('scopeCleanup.confirm.effect') : T('scopeCleanup.confirm.none') }),
-      ...(skipped ? [el('p', { textContent: T('scopeCleanup.confirm.skipped', { n: skipped }) })] : []),
+      el('p', { textContent: acting ? T('scopeCleanup.confirm.effect', { tag: name }) : T('scopeCleanup.confirm.none') }),
+      ...(skipped ? [el('p', { textContent: T('scopeCleanup.confirm.skipped', { n: skipped, tag: name }) })] : []),
       el('div', { className: 'btns' }, cancel, ok)));
     ui.root.append(dialog);
     cancel.focus(); // safe default: Enter cancels
   }
 
-  async function run(todo, tid) {
+  // tag: the one confirmed in the dialog. The tag list is locked while the series runs.
+  async function run(todo, tid, tag) {
     running = true;
     renderList();
     if (panel) { ui.progress.classList.add('on'); ui.fill.style.width = '0'; }
     setStatus(T('scopeCleanup.status.running', { done: 0, total: todo.length }));
     const out = await C.runClean(todo, tid, graph.call, {
       pause: sleep,
+      tag,
       onProgress: (i, res) => {
         const item = todo[i];
         results.set(item.key, res);
@@ -190,7 +217,8 @@
     });
     running = false;
     const n = s => out.filter(r => r.status === s).length;
-    setStatus(T('scopeCleanup.status.done', { done: n('done'), none: n('onlyDefault') + n('noDefault') + n('unreadable'), failed: n('failed'), unknown: n('unknown'), notSent: n('notSent') }));
+    setStatus(T('scopeCleanup.status.done', { done: n('done'), none: n('onlyTag') + n('absent') + n('unreadable'), failed: n('failed'), unknown: n('unknown'), notSent: n('notSent') }));
+    renderTags(); // the counts per tag changed
     renderList();
     setTimeout(() => ui.progress?.classList.remove('on'), 1500);
   }
@@ -211,10 +239,11 @@
     ui.onlyBox = el('input', { type: 'checkbox', checked: onlyRemovable, onchange: () => {
       onlyRemovable = ui.onlyBox.checked;
       // A hidden Default only row must not stay checked: the count on the button is⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ what gets processed.
-      if (onlyRemovable) for (const i of items || []) if (C.stateOf(i.tags) === 'onlyDefault') checked.delete(i.key);
+      if (onlyRemovable) for (const i of items || []) if (C.stateOf(i.tags, target) === 'onlyTag') checked.delete(i.key);
       renderList();
     } });
     ui.onlyText = el('span');
+    ui.tag = el('select', { title: T('scopeCleanup.ui.tag'), ariaLabel: T('scopeCleanup.ui.tag'), onchange: tagChanged }, el('option', { value: target, textContent: tagName(target) }));
     ui.list = el('div', { className: 'list' });
     ui.fill = el('i');
     ui.progress = el('div', { className: 'progress' }, ui.fill);
@@ -222,7 +251,8 @@
     ui.go = el('button', { className: 'act', disabled: true, textContent: T('scopeCleanup.ui.go', { n: 0 }), onclick: askConfirm });
     ui.export = el('button', { className: 'act ghost', disabled: true, textContent: T('scopeCleanup.ui.export'), title: T('scopeCleanup.ui.exportTitle'), onclick: exportSelected });
     const head = el('div', { className: 'head', title: T('scopeCleanup.ui.drag') }, T('scopeCleanup.ui.title'), el('span', { className: 'tools' }, ...(window.__tenantCompassPin ? [window.__tenantCompassPin('scope-cleanup')] : []), el('button', { className: 'x', textContent: '×', title: T('scopeCleanup.ui.close'), onclick: toggle })));
-    panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant), el('div', { className: 'bar' }, ui.all, ui.search),
+    panel = el('div', { className: 'panel' }, head, el('div', { className: 'bar' }, ui.tenant),
+      el('div', { className: 'bar' }, el('span', { textContent: T('scopeCleanup.ui.tag') }), ui.tag), el('div', { className: 'bar' }, ui.all, ui.search),
       el('div', { className: 'bar' }, ui.type, ui.os), el('div', { className: 'bar' }, el('label', { className: 'opt' }, ui.onlyBox, ui.onlyText)), ui.list, el('div', { className: 'foot' }, ui.progress, ui.status, el('div', { className: 'btns' }, ui.export, ui.go)));
     ui.root.append(panel);
     opened();
@@ -233,7 +263,7 @@
       const tenant = graph.tenantNow();
       if (!panel) return;
       ui.tenant.textContent = tenant ? [directoryName(), tenant.tid].filter(Boolean).join(' · ') : T('assignForm.noToken');
-      if (tenant) { clearInterval(poll); if (!running) await load(); else renderList(); }
+      if (tenant) { clearInterval(poll); if (!running) await load(); else { renderTags(); renderList(); } }
     };
     look();
     poll = setInterval(look, 2000); // the token shows up with the portal's next Graph call

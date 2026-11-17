@@ -10,16 +10,16 @@ const DM = 'https://graph.microsoft.com/beta/deviceManagement/', APPS = 'https:/
 // ---------- the rule: Default goes only when another tag stays ----------
 
 assert.strictEqual(C.stateOf(['0', '5']), 'removable');
-assert.strictEqual(C.stateOf(['0']), 'onlyDefault');
-assert.strictEqual(C.stateOf(['5']), 'noDefault');
+assert.strictEqual(C.stateOf(['0']), 'onlyTag');
+assert.strictEqual(C.stateOf(['5']), 'absent');
 assert.strictEqual(C.stateOf([]), 'unreadable');
 assert.strictEqual(C.stateOf(null), 'unreadable');
 assert.strictEqual(C.stateOf([0, 5]), 'removable'); // the id may come as a number
 
 assert.deepStrictEqual(C.cleanPlan('sc', { roleScopeTagIds: ['0', '5', '7'] }), { action: 'remove', tags: ['0', '5', '7'], body: { roleScopeTagIds: ['5', '7'] } });
-assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: ['0'] }).action, 'onlyDefault');
+assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: ['0'] }).action, 'onlyTag');
 assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: ['0'] }).body, undefined); // nothing to send
-assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: ['5'] }).action, 'noDefault');
+assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: ['5'] }).action, 'absent');
 for (const empty of [{}, { roleScopeTagIds: [] }, { roleScopeTagIds: 'x' }, null]) assert.strictEqual(C.cleanPlan('sc', empty).action, 'unreadable');
 // Polymorphic resources: PATCH needs the type, and without it nothing is sent
 assert.deepStrictEqual(C.cleanPlan('dc', { '@odata.type': G + 'x', roleScopeTagIds: ['0', '5'] }).body, { '@odata.type': G + 'x', roleScopeTagIds: ['5'] });
@@ -28,13 +28,34 @@ assert.strictEqual(C.cleanPlan('comp', { roleScopeTagIds: ['0', '5'] }).action, 
 assert.deepStrictEqual(C.cleanPlan('ps', { roleScopeTagIds: ['0', '5'] }).body, { roleScopeTagIds: ['5'] });
 
 // Never an empty list, whatever the⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ input
-for (const tags of [['0'], ['0', '0'], [0], ['0', 0]]) assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: tags }).action, 'onlyDefault', JSON.stringify(tags));
+for (const tags of [['0'], ['0', '0'], [0], ['0', 0]]) assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: tags }).action, 'onlyTag', JSON.stringify(tags));
 
 // The "Default + another tag" filter: Default only goes away, a row already processed stays to show its result
 assert.strictEqual(C.keepRow(['0', '5'], false, true), true);
 assert.strictEqual(C.keepRow(['0'], false, true), false);
 assert.strictEqual(C.keepRow(['5'], true, true), true); // Default just removed: the result stays visible
-assert.strictEqual(C.keepRow(['0'], false, false), true); // filter off: everything
+assert.strictEqual(C.keepRow(['0'], false, false), true); // filter off: every object holding the tag
+assert.strictEqual(C.keepRow(['5'], false, false), false); // not holding it: not listed
+assert.strictEqual(C.keepRow(null, false, false), false);
+
+// ---------- another tag than Default: same rule, the tag goes only when another one stays ----------
+
+assert.strictEqual(C.stateOf(['0', '5'], '5'), 'removable');
+assert.strictEqual(C.stateOf(['5'], '5'), 'onlyTag');
+assert.strictEqual(C.stateOf(['5', 5], 5), 'onlyTag');
+assert.strictEqual(C.stateOf(['0', '7'], '5'), 'absent');
+assert.deepStrictEqual(C.cleanPlan('sc', { roleScopeTagIds: ['0', '5', '7'] }, '5').body, { roleScopeTagIds: ['0', '7'] }); // Default stays
+assert.deepStrictEqual(C.cleanPlan('dc', { '@odata.type': G + 'x', roleScopeTagIds: ['5', '7'] }, 7).body, { '@odata.type': G + 'x', roleScopeTagIds: ['5'] });
+for (const tags of [['5'], ['5', '5'], [5]]) assert.strictEqual(C.cleanPlan('sc', { roleScopeTagIds: tags }, '5').body, undefined, JSON.stringify(tags));
+assert.strictEqual(C.keepRow(['0', '5'], false, true, '5'), true);
+assert.strictEqual(C.keepRow(['5'], false, true, '5'), false);
+assert.strictEqual(C.keepRow(['0'], false, false, '5'), false);
+
+// Tag list: Default first even when unnamed or unused, then by name, with the number of objects holding each tag
+const names = new Map([['5', 'Paris'], ['7', 'Lyon'], ['9', 'Unused']]);
+assert.deepStrictEqual(C.tagChoices([['0', '5'], ['5', '7', '7'], null, ['12']], names),
+  [{ id: '0', name: 'Default', n: 1 }, { id: '12', name: '12', n: 1 }, { id: '7', name: 'Lyon', n: 1 }, { id: '5', name: 'Paris', n: 2 }, { id: '9', name: 'Unused', n: 0 }]);
+assert.deepStrictEqual(C.tagChoices([], new Map()), [{ id: '0', name: 'Default', n: 0 }]);
 
 // ---------- closed tables ----------
 
@@ -101,12 +122,12 @@ for (const r of [{}, { roleScopeTagIds: [] }, { roleScopeTagIds: null }, null]) 
   // Only Default: no write at all, even when the list said otherwise (the read just before the write decides)
   f = fake({ policy: { status: 200, body: { '@odata.type': G + 'x', roleScopeTagIds: ['0'] } } });
   r = await C.cleanLine(item, 'T', f.call);
-  assert.deepStrictEqual([r.status, r.tags], ['onlyDefault', ['0']]);
+  assert.deepStrictEqual([r.status, r.tags], ['onlyTag', ['0']]);
   assert.deepStrictEqual(f.calls.map(c => c.op), ['policy']);
 
   // Default already gone, read refused, unreadable: no write
   f = fake({ policy: { status: 200, body: { '@odata.type': G + 'x', roleScopeTagIds: ['5'] } } });
-  assert.strictEqual((await C.cleanLine(item, 'T', f.call)).status, 'noDefault');
+  assert.strictEqual((await C.cleanLine(item, 'T', f.call)).status, 'absent');
   assert.ok(!f.calls.some(c => c.op === 'patchTags'));
   f = fake({ policy: { status: 403, message: 'denied' } });
   r = await C.cleanLine(item, 'T', f.call);
@@ -132,7 +153,7 @@ for (const r of [{}, { roleScopeTagIds: [] }, { roleScopeTagIds: null }, null]) 
   // 429 waits Retry-After then goes on
   f = fake({ policy: [{ status: 429, retryAfter: 7 }, { status: 200, body: { roleScopeTagIds: ['0', '5'] } }, { status: 200, body: { roleScopeTagIds: ['0'] } }], patchTags: { status: 200 } });
   let out = await C.runClean(items, 'T', f.call, opts);
-  assert.deepStrictEqual(out.map(x => x.status), ['done', 'onlyDefault']);
+  assert.deepStrictEqual(out.map(x => x.status), ['done', 'onlyTag']);
   assert.ok(waits.includes(7000) && waits.includes(250));
   // 401 stops the series
   f = fake({ policy: [{ status: 401 }, { status: 200, body: { roleScopeTagIds: ['0', '5'] } }] });
@@ -140,11 +161,16 @@ for (const r of [{}, { roleScopeTagIds: [] }, { roleScopeTagIds: null }, null]) 
   assert.deepStrictEqual(out.map(x => x.status), ['failed', 'notSent']);
   assert.strictEqual(out[0].error, 'assignForm.err.expired');
   assert.strictEqual(f.calls.length, 1);
+  // Another tag: the read decides with that tag, the write keeps Default
+  f = fake({ policy: [{ status: 200, body: { roleScopeTagIds: ['0', '5'] } }, { status: 200, body: { roleScopeTagIds: ['5'] } }], patchTags: { status: 200 } });
+  out = await C.runClean(items, 'T', f.call, { ...opts, tag: '5' });
+  assert.deepStrictEqual(out.map(x => x.status), ['done', 'onlyTag']);
+  assert.deepStrictEqual(f.calls.filter(c => c.op === 'patchTags').map(c => c.args.body), [{ roleScopeTagIds: ['0'] }]);
   // Progress after each line
   const seen = [];
   f = fake({ policy: { status: 200, body: { roleScopeTagIds: ['0'] } } });
   await C.runClean(items, 'T', f.call, { ...opts, onProgress: (i, res) => seen.push([i, res.status]) });
-  assert.deepStrictEqual(seen, [[0, 'onlyDefault'], [1, 'onlyDefault']]);
+  assert.deepStrictEqual(seen, [[0, 'onlyTag'], [1, 'onlyTag']]);
 
   // JSON export: the checked rows only, with tag names, nothing read from Graph
   const names = id => ({ '0': 'Default', '7': 'Paris' })[id] || id;
