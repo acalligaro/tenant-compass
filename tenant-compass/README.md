@@ -50,7 +50,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Change Snapshot | Journal local des modifications : différence avant / après, auteur, n° de ticket, export JSON / CSV | Fenêtre en bas à droite après un enregistrement ; journal depuis le menu |
 | Set Tenant Language | Bascule la console entre deux langues prédéfinies, en 1 clic | Boutons 🌐 du menu ; Intune, Azure, Entra, Defender, Purview |
 | Raccourci PIM | Ouvre PIM > Mes rôles (affectations éligibles ou actives) sur le tenant de l'onglet actif, en 1 clic | Boutons 🔑 PIM éligible et 🔑 PIM actif du menu |
-| Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec groupe et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, au-dessus d'Assignment Search (Intune) |
+| Policy Import | Crée des stratégies à partir d'exports JSON As-Built, avec affectation (groupe, tous les utilisateurs, tous les appareils) et scope tags en option. **Écrit dans le tenant : désactivée par défaut** | Bouton Import, au-dessus d'Assignment Search (Intune) |
 | Bulk Assignment | Ajoute à plusieurs stratégies une affectation (groupe, tous les utilisateurs, tous les appareils), un filtre et des scope tags. **Écrit dans le tenant : désactivée par défaut** | Bouton Bulk Assign, au-dessus d'Import (Intune) |
 | Scope Tags Clean up | Retire un scope tag choisi dans une liste (Default ou un autre) des stratégies et applications qui en gardent au moins un autre. **Écrit dans le tenant : désactivée par défaut** | Bouton Scope Tags, au-dessus de Bulk Assign (Intune) |
 
@@ -68,7 +68,7 @@ Architecture détaillée (scripts, flux, sécurité, stockage) : [ARCHITECTURE.m
 | Fonction | Échange réseau | Contenu |
 |---|---|---|
 | As-Built, Assignment Lens, Assignment Search | Lectures (`GET`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies, applications, groupes, utilisateurs et appareils affichés ou recherchés, comme le fait le portail |
-| Policy Import, si vous l'activez | Lecture des noms existants (`GET`) et création (`POST`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies des fichiers que vous choisissez et confirmez, et si vous le demandez leur groupe et leurs scope tags |
+| Policy Import, si vous l'activez | Lecture des noms existants (`GET`) et création (`POST`) sur `graph.microsoft.com`, avec la session du portail | Les stratégies des fichiers que vous choisissez et confirmez, et si vous le demandez leur affectation et leurs scope tags |
 | Bulk Assignment, si vous l'activez | Lectures (`GET`) des stratégies, affectations, groupes, filtres et scope tags, puis `POST …/assign` et `PATCH` (scope tags) sur `graph.microsoft.com`, avec la session du portail | Les stratégies que vous cochez, avec leurs affectations existantes |
 | Scope Tags Clean up, si vous l'activez | Lectures (`GET`) des stratégies, applications et scope tags, puis `PATCH` sur `graph.microsoft.com`, avec la session du portail | Les scope tags des objets que vous cochez |
 | Settings Explainer | Lecture sans cookie de pages publiques `learn.microsoft.com/…/windows/client-management/mdm/` | Aucune donnée du tenant : seulement le nom de la page de documentation demandée |
@@ -330,10 +330,10 @@ Elle crée des stratégies Intune à partir des exports JSON d'As-Built, sans Po
 **Pris en charge** : catalogue de paramètres, profils de configuration (dont les profils personnalisés `.mobileconfig` et `.plist`), conformité, scripts PowerShell, scripts shell macOS, attributs personnalisés macOS, remédiations. Les autres types d'un export (applications, ADMX, inscription, rôles…) sont signalés et ignorés.
 
 - **Préfixe** (optionnel) : ajouté au nom de chaque objet créé, avec le séparateur que vous tapez (`TEST - Ma stratégie`). L'aperçu montre le nom final, et les doublons sont vérifiés sur ce nom. Les noms de fichier des scripts et les noms de custom attribute ne changent pas.
-- **Affectation** : sans option, une stratégie créée n'a d'effet sur aucun appareil. L'option **groupe d'affectation** (recherche par nom, ou ID collé) affecte chaque objet créé, en inclusion et sans filtre : il s'applique alors aux appareils du groupe.
+- **Affectation** : sans option, une stratégie créée n'a d'effet sur aucun appareil. L'option **Affecter à** affecte chaque objet créé, en inclusion et sans filtre : à un groupe (recherche par nom, ou ID collé), à **Tous les utilisateurs** ou à **Tous les appareils**. Il s'applique alors aux utilisateurs ou appareils ciblés.
 - **Scripts et remédiations** : les scripts ne sont affectés que si vous cochez **Affecter aussi les scripts**, car ils s'exécutent sur les appareils. Les remédiations ne sont jamais affectées : elles demandent un planning, à choisir dans le portail.
 - **Scope tags** (option) : remplacent ceux du fichier, à la création.
-- **Création seulement** : un `POST` par stratégie vers une liste fermée de collections, puis un `POST …/assign` si vous avez choisi un groupe. Rien d'existant n'est modifié ni supprimé. Pour annuler, supprimez l'objet dans le portail : son ID s'affiche sur la ligne. Si l'affectation échoue, l'objet reste créé et la ligne l'indique.
+- **Création seulement** : un `POST` par stratégie vers une liste fermée de collections, puis un `POST …/assign` si vous avez choisi une cible. Rien d'existant n'est modifié ni supprimé. Pour annuler, supprimez l'objet dans le portail : son ID s'affiche sur la ligne. Si l'affectation échoue, l'objet reste créé et la ligne l'indique.
 - **Secrets** : une stratégie dont un secret est absent de l'export (valeur masquée ou chiffrée, clé Wi-Fi) est bloquée, à créer dans le portail.
 - **Certificats** : un profil lié à un profil de certificat (SCEP, Wi-Fi Enterprise, VPN, réseau filaire…) est bloqué, car ce lien n'est pas dans l'export. Les liens facultatifs ne bloquent pas et sont perdus : certificat PKINIT de l'extension SSO, `privacyAccessControls` Windows.
 - **Autre tenant** : les balises d'étendue reviennent à Default, et la conformité ne garde que l'action de blocage, avec son délai de grâce.

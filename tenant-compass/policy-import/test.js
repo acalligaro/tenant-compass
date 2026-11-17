@@ -250,6 +250,8 @@ assert.strictEqual(L.markDuplicates([L.applyPrefix(ready('sc', 'Base'), 'T-')], 
   // Opt-in: off by default in both copies of DEFAULTS, and registered for the Intune portal only
   const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   for (const f of ['background.js', 'popup.js']) assert.match(read(f), /const DEFAULTS = \{[^}]*policyImport: false/, f);
+  // Optional assignment: a group, All users or All devices, no filter
+  assert.match(read('policy-import/page.js'), /__tenantCompassAssignForm\(\{[^}]*builtIn: true, filters: false/);
   const registration = /policyImport: \[\{[\s\S]*?\}\],/.exec(read('background.js'))?.[0] || '';
   assert.match(registration, /'policy-import\/lib\.js', 'policy-import\/page\.js'\]/);
   assert.match(registration, /world: 'MAIN'/);

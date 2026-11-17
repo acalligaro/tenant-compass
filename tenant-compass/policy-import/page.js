@@ -1,7 +1,7 @@
 // MAIN world, every frame of the Intune portal. Off by default: it writes to the tenant.
 // All frames: the Graph bridge observes the portal's token and serves the top frame.
 // Top frame: floating button, file picker, preview, confirmation, creation of the checked policies.
-// Writes: one POST per policy to a closed list of collections (lib.js), then one assignment when the user chose a group. Nothing⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ is updated or deleted.
+// Writes: one POST per policy to a closed list of collections (lib.js), then one assignment when the user chose a target (group, all users, all devices). Nothing⁣​​‌​‌​​​​​​‌​​‌​‍​⁣ is updated or deleted.
 (() => {
   const L = globalThis.PolicyImportLib, A = globalThis.TenantCompassAssign, bridge = window.__tenantCompassGraphBridge;
   if (!L || !A || !bridge) return;
@@ -262,7 +262,7 @@
       ui.scriptsRow.hidden = !form.value().target;
       if (prepared.length && !entries.some(e => e.result)) rebuild(); else renderRows();
     };
-    form ||= window.__tenantCompassAssignForm({ call: graph.call, el, builtIn: false, filters: false, onChange: optionsChanged });
+    form ||= window.__tenantCompassAssignForm({ call: graph.call, el, builtIn: true, filters: false, onChange: optionsChanged });
     const v = form.value();
     ui.scripts ||= el('input', { type: 'checkbox' });
     ui.scriptsRow = el('label', { className: 'opt', hidden: !v.target }, ui.scripts, T('policyImport.ui.assignScripts'));

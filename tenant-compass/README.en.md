@@ -50,7 +50,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Change Snapshot | Local change log: before / after diff, author, ticket number, JSON / CSV export | Window at the bottom right after a save; log from the menu |
 | Set Tenant Language | Switches the console between two preset languages in one click | 🌐 buttons in the menu; Intune, Azure, Entra, Defender, Purview |
 | PIM shortcut | Opens PIM > My roles (eligible or active assignments) on the active tab's tenant in one click | 🔑 PIM eligible and 🔑 PIM active buttons in the menu |
-| Policy Import | Creates policies from As-Built JSON exports, with optional group and scope tags. **Writes to the tenant: off by default** | Import button, above Assignment Search (Intune) |
+| Policy Import | Creates policies from As-Built JSON exports, with optional assignment (group, all users, all devices) and scope tags. **Writes to the tenant: off by default** | Import button, above Assignment Search (Intune) |
 | Bulk Assignment | Adds an assignment (group, all users, all devices), a filter and scope tags to several policies. **Writes to the tenant: off by default** | Bulk Assign button, above Import (Intune) |
 | Scope Tags Clean up | Removes a scope tag picked from a list (Default or another one) from policies and apps that keep at least one other. **Writes to the tenant: off by default** | Scope Tags button, above Bulk Assign (Intune) |
 
@@ -68,7 +68,7 @@ Detailed architecture (scripts, flows, security, storage), in French: [ARCHITECT
 | Feature | Network traffic | Content |
 |---|---|---|
 | As-Built, Assignment Lens, Assignment Search | Reads (`GET`) on `graph.microsoft.com`, with the portal session | The policies, apps, groups, users and devices shown or searched, as the portal itself does |
-| Policy Import, if you turn it on | Reads existing names (`GET`) and creates (`POST`) on `graph.microsoft.com`, with the portal session | The policies of the files you choose and confirm, and if you ask their group and scope tags |
+| Policy Import, if you turn it on | Reads existing names (`GET`) and creates (`POST`) on `graph.microsoft.com`, with the portal session | The policies of the files you choose and confirm, and if you ask their assignment and scope tags |
 | Bulk Assignment, if you turn it on | Reads (`GET`) policies, assignments, groups, filters and scope tags, then `POST …/assign` and `PATCH` (scope tags) on `graph.microsoft.com`, with the portal session | The policies you check, with their existing assignments |
 | Scope Tags Clean up, if you turn it on | Reads (`GET`) policies, apps and scope tags, then `PATCH` on `graph.microsoft.com`, with the portal session | The scope tags of the objects you check |
 | Settings Explainer | Cookie-less reads of public `learn.microsoft.com/…/windows/client-management/mdm/` pages | No tenant data: only the name of the documentation page requested |
@@ -328,10 +328,10 @@ It creates Intune policies from As-Built JSON exports, without PowerShell, witho
 **Supported**: settings catalog, configuration profiles (including `.mobileconfig` and `.plist` custom profiles), compliance, PowerShell scripts, macOS shell scripts, macOS custom attributes, remediations. Other types in an export (apps, ADMX, enrollment, roles…) are flagged and ignored.
 
 - **Prefix** (optional): added to the name of each created object, with the separator you type (`TEST - My policy`). The preview shows the final name, and duplicates are checked on that name. Script file names and custom attribute names do not change.
-- **Assignment**: without the option, a created policy affects no device. The **assignment group** option (search by name, or pasted ID) assigns each created object, as an inclusion and without a filter: it then applies to the devices of the group.
+- **Assignment**: without the option, a created policy affects no device. The **Assign to** option assigns each created object, as an inclusion and without a filter: to a group (search by name, or pasted ID), to **All users** or to **All devices**. It then applies to the users or devices targeted.
 - **Scripts and remediations**: scripts are assigned only if you check **Assign the scripts too**, because they run on devices. Remediations are never assigned: they need a schedule, to choose in the portal.
 - **Scope tags** (option): replace those of the file, at creation.
-- **Creation only**: one `POST` per policy to a closed list of collections, then one `POST …/assign` if you chose a group. Nothing existing is updated or deleted. To undo, delete the object in the portal: its ID is shown on the row. If the assignment fails, the object stays created and the row says so.
+- **Creation only**: one `POST` per policy to a closed list of collections, then one `POST …/assign` if you chose a target. Nothing existing is updated or deleted. To undo, delete the object in the portal: its ID is shown on the row. If the assignment fails, the object stays created and the row says so.
 - **Secrets**: a policy whose secret is missing from the export (masked or encrypted value, Wi-Fi key) is blocked, to be created in the portal.
 - **Certificates**: a profile linked to a certificate profile (SCEP, Enterprise Wi-Fi, VPN, wired network…) is blocked, because that link is not in the export. Optional links do not block and are lost: SSO extension PKINIT certificate, Windows `privacyAccessControls`.
 - **Other tenant**: scope tags go back to Default, and compliance keeps only the block action, with its grace period.
